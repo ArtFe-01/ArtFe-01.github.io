@@ -824,33 +824,67 @@
     }
 
     // fill sector wedges as triangles bounded by adjacent pole corners
-    for(const e of EDGE_SECTORS_CLOCKWISE){
-      const sector = SECTORS.find(s=>s.key===e.sectorKey);
+    for (const e of EDGE_SECTORS_CLOCKWISE) {
+      const sector = SECTORS.find(s => s.key === e.sectorKey);
       const A = polePos.get(e.poleA);
       const B = polePos.get(e.poleB);
-      if(!sector || !A || !B) continue;
-
+      if (!sector || !A || !B) continue;
+    
+      // sector triangle fill
       ctx.beginPath();
-      ctx.moveTo(cx,cy);
-      ctx.lineTo(A.x,A.y);
-      ctx.lineTo(B.x,B.y);
+      ctx.moveTo(cx, cy);
+      ctx.lineTo(A.x, A.y);
+      ctx.lineTo(B.x, B.y);
       ctx.closePath();
       ctx.fillStyle = hexToRgba(sector.color, 0.22);
       ctx.fill();
       ctx.strokeStyle = "rgba(255,255,255,.08)";
       ctx.stroke();
-
+    
       // sector label at mid-angle between corners
       const m = midAngle(A.a360, B.a360);
       const ma = rad(m);
-      const lx = cx + Math.cos(ma)*(R*0.58);
-      const ly = cy - Math.sin(ma)*(R*0.58);
+    
+      const lx = cx + Math.cos(ma) * (R * 0.58);
+      const ly = cy - Math.sin(ma) * (R * 0.58);
       ctx.font = "11px system-ui";
       ctx.fillStyle = "rgba(233,238,252,.70)";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.fillText(sector.name, lx, ly);
+    
+      // ---- slice divider (radar line) ----
+      // Splits each sector into two slices by drawing a radial line aimed at the sector mid-angle,
+      // clipped to the hexagon side segment A-B.
+      const cross = (u, v) => u.x * v.y - u.y * v.x;
+    
+      // canvas ray direction for angle ma (note: canvas y grows downward)
+      const r = { x: Math.cos(ma), y: -Math.sin(ma) }; // ray from center
+      const s = { x: (B.x - A.x), y: (B.y - A.y) };    // segment A->B
+      const AC = { x: (A.x - cx), y: (A.y - cy) };
+    
+      const denom = cross(r, s);
+      if (Math.abs(denom) > 1e-9) {
+        const t = cross(AC, s) / denom; // along ray
+        const u = cross(AC, r) / denom; // along segment
+    
+        if (t > 0 && u >= 0 && u <= 1) {
+          const ix = cx + r.x * t;
+          const iy = cy + r.y * t;
+    
+          ctx.save();
+          ctx.beginPath();
+          ctx.moveTo(cx, cy);
+          ctx.lineTo(ix, iy);
+          // ctx.setLineDash([6, 6]); // optional: dashed look. Remove for solid.
+          ctx.strokeStyle = "rgba(255,255,255,.14)";
+          ctx.lineWidth = 1;
+          ctx.stroke();
+          ctx.restore();
+        }
+      }
     }
+
 
     // outer hexagon outline (corners are poles)
     ctx.beginPath();
@@ -2199,6 +2233,7 @@
 </script>
 </body>
 </html>
+
 
 
 
