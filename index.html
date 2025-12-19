@@ -166,7 +166,7 @@
         <div class="logo"></div>
         <div>
           <h1>Hexa-Political Compass</h1>
-          <div class="sub">Coordinate-based politico-ideological classification (6 sectors + grey center)</div>
+          <div class="sub">Coordinate-based politico-ideological classification (6 color sectors + apolitical center)</div>
         </div>
       </div>
 
@@ -210,22 +210,27 @@
     serverTimestamp, runTransaction, increment
   } from "https://www.gstatic.com/firebasejs/12.7.0/firebase-firestore.js";
 
-  // ---- Firebase config (REPLACE THIS) ----
+  // ---- Firebase config (PASTE YOUR REAL ONE HERE) ----
   const firebaseConfig = {
-    apiKey: "AIzaSyAtVzsSQpngelRO3Yn49cKPzGgU0jtqRfk",
-    authDomain: "hexa-political-compass.firebaseapp.com",
-    projectId: "hexa-political-compass",
-    storageBucket: "hexa-political-compass.firebasestorage.app",
-    messagingSenderId: "1055196691338",
-    appId: "1:1055196691338:web:b25959417b5a7099eb2673",
-    measurementId: "G-PVBZBEDRK8"
+    apiKey: "PASTE_YOURS",
+    authDomain: "PASTE_YOURS",
+    projectId: "PASTE_YOURS",
+    storageBucket: "PASTE_YOURS",
+    messagingSenderId: "PASTE_YOURS",
+    appId: "PASTE_YOURS",
   };
 
   const app = initializeApp(firebaseConfig);
   const auth = getAuth(app);
   const db = getFirestore(app);
 
-  // ---- Model: sectors (clockwise): Brown, Blue, Purple, Green, Red, Red-Brown; center is Grey ----
+  // ---------- MODEL ----------
+  // Colors clockwise: Brown, Blue, Purple, Green, Red, Red-Brown
+  // Borders between colors define the 6 "politics poles":
+  // Brown+RedBrown -> Third-Position; Blue+Brown -> Reactionary; Purple+Blue -> Right-wing;
+  // Green+Purple -> Centrist; Red+Green -> Left-wing; RedBrown+Red -> Syncretic
+  // Center -> Apoliticism/Pragmatism
+
   const SECTORS = [
     { key: "BROWN",     name: "Brown",      color: getCSS("--brown"),    angleDeg:  90 },
     { key: "BLUE",      name: "Blue",       color: getCSS("--blue"),     angleDeg:  30 },
@@ -234,22 +239,131 @@
     { key: "RED",       name: "Red",        color: getCSS("--red"),      angleDeg: -150 },
     { key: "REDBROWN",  name: "Red-Brown",  color: getCSS("--redbrown"), angleDeg: 150 },
   ];
-  const GREY = { key: "GREY", name:"Grey (Center)", color:getCSS("--grey") };
 
-  const CATEGORY_ARCS = [
-    { a:"BROWN",    b:"BLUE",     label:"Reactionary Politics" },
-    { a:"BLUE",     b:"PURPLE",   label:"Right-wing Politics" },
-    { a:"PURPLE",   b:"GREEN",    label:"Centrist Politics" },
-    { a:"GREEN",    b:"RED",      label:"Left-wing Politics" },
-    { a:"RED",      b:"REDBROWN", label:"Syncretic Politics" },
-    { a:"REDBROWN", b:"BROWN",    label:"Third-Position Politics" },
+  // Clockwise order (matches your spec)
+  const ORDER = ["BROWN","BLUE","PURPLE","GREEN","RED","REDBROWN"];
+
+  const CENTER = { key: "CENTER", name:"Apoliticism / Pragmatism", color:getCSS("--grey") };
+
+  // The 6 politics "poles" live on the borders between adjacent colors (mid-angles)
+  const POLES = [
+    { key:"THIRD",  name:"Third-Position Politics", pair:["BROWN","REDBROWN"], angleDeg: 120 },
+    { key:"REACT",  name:"Reactionary Politics",    pair:["BROWN","BLUE"],     angleDeg: 60 },
+    { key:"RIGHT",  name:"Right-wing Politics",     pair:["BLUE","PURPLE"],    angleDeg: 0 },
+    { key:"CENT",   name:"Centrist Politics",       pair:["PURPLE","GREEN"],   angleDeg: -60 },
+    { key:"LEFT",   name:"Left-wing Politics",      pair:["GREEN","RED"],      angleDeg: -120 },
+    { key:"SYNC",   name:"Syncretic Politics",      pair:["RED","REDBROWN"],   angleDeg: 180 }, // (-180 == 180)
   ];
+
+  function pairKey(a,b){ return [a,b].sort().join("_"); }
+  const POLE_BY_PAIR = new Map(POLES.map(p=>[pairKey(p.pair[0], p.pair[1]), p]));
+
+  // Slice elaborations (each color is split into 2 slices, leaning to one border pole or the other)
+  // We attach slice definitions by: sectorKey -> neighborKey (which border it's leaning toward)
+  const SLICE_DEFS = {
+    RED: {
+      REDBROWN: {
+        title: "Syncretic-Left (Syncretic ↔ Left)",
+        leansToPole: "Syncretic Politics",
+        text:
+          "A leftist economic orientation expressed through the totalizing, nationalist, leader-centered style of the Syncretic border. " +
+          "Class struggle begins to resemble national struggle; the state becomes the primary vehicle."
+      },
+      GREEN: {
+        title: "Formal Left (Left ↔ Left)",
+        leansToPole: "Left-wing Politics",
+        text:
+          "State-structured leftism focused primarily on class and redistribution rather than national identity. " +
+          "Rigid, organized, and oriented toward centralized implementation."
+      }
+    },
+    GREEN: {
+      RED: {
+        title: "Formal Left (Left ↔ Left)",
+        leansToPole: "Left-wing Politics",
+        text:
+          "Revolutionary left energy without embracing heavy state authority; leans toward bottom-up organization. " +
+          "Shares leftist goals while rejecting authoritarian methods."
+      },
+      PURPLE: {
+        title: "Centrist-Left (Centrist ↔ Left)",
+        leansToPole: "Centrist Politics",
+        text:
+          "Left goals pursued through pragmatic liberal-democratic frameworks; radicalism softens into practical reforms. " +
+          "Blends social progress with institutional pluralism."
+      }
+    },
+    PURPLE: {
+      GREEN: {
+        title: "Centrist-Right (Centrist ↔ Right)",
+        leansToPole: "Centrist Politics",
+        text:
+          "Liberty-forward right-leaning centrism: personal freedom plus market orientation. " +
+          "Typically favors open markets and civil liberties within a constitutional framework."
+      },
+      BLUE: {
+        title: "Formal Right (Right ↔ Right)",
+        leansToPole: "Right-wing Politics",
+        text:
+          "Market hierarchy and competition taken seriously; tends toward minimal state or strict limits on state power. " +
+          "Sees state intervention as a distortion of natural economic order."
+      }
+    },
+    BLUE: {
+      PURPLE: {
+        title: "Formal Right (Right ↔ Right)",
+        leansToPole: "Right-wing Politics",
+        text:
+          "Conventional market-friendly rightism that accepts a state as necessary infrastructure for property and contracts. " +
+          "Order is a tool to keep markets functioning."
+      },
+      BROWN: {
+        title: "Reactionary-Right (Reactionary ↔ Right)",
+        leansToPole: "Reactionary Politics",
+        text:
+          "Cultural order outweighs economics: tradition, hierarchy, and restoration instincts dominate. " +
+          "The market becomes secondary to preserving inherited social structure."
+      }
+    },
+    BROWN: {
+      BLUE: {
+        title: "Reactionary (Reactionary ↔ Reactionary)",
+        leansToPole: "Reactionary Politics",
+        text:
+          "Strong hierarchy and inherited legitimacy; order is grounded in tradition rather than market outcomes. " +
+          "Authority is justified by lineage, religion, or long-standing institutions."
+      },
+      REDBROWN: {
+        title: "Third-Position Right (Third-Position ↔ Reactionary)",
+        leansToPole: "Third-Position Politics",
+        text:
+          "Reactionary restoration enforced through a collectivist, mobilized, total-state mentality. " +
+          "Seeks unity through a single overriding identity and command structure."
+      }
+    },
+    REDBROWN: {
+      BROWN: {
+        title: "Third-Position (Third-Position ↔ Third-Position)",
+        leansToPole: "Third-Position Politics",
+        text:
+          "A fully mobilized collectivist center: anti-liberal, anti-pluralist, oriented toward total political unity. " +
+          "Uses discipline and mass coordination as the main political method."
+      },
+      RED: {
+        title: "Syncretic (Syncretic ↔ Syncretic)",
+        leansToPole: "Syncretic Politics",
+        text:
+          "Left-origin or left-coded methods fused with nationalism, leader cult, and state-religion style cohesion. " +
+          "Ideology becomes a unified civil faith of the state."
+      }
+    }
+  };
 
   function getCSS(varName){ return getComputedStyle(document.documentElement).getPropertyValue(varName).trim(); }
   function rad(deg){ return deg * Math.PI / 180; }
   function clamp(x,a,b){ return Math.max(a, Math.min(b, x)); }
 
-  // ---- Default scoring settings (admin can override in Firestore) ----
+  // ---------- DEFAULT SCORING SETTINGS ----------
   const DEFAULT_SETTINGS = {
     answerScale: [
       { key:"SD", label:"Strongly Disagree", value:-1.0 },
@@ -281,6 +395,7 @@
     },
     centerRadius: 0.12,
     pureCornerRadius: 0.82,
+    poleSnapDeg: 7, // if far from center AND within this many degrees of a pole line => "Pure Mono-Politics: <pole>"
   };
 
   const state = {
@@ -289,10 +404,9 @@
     settings: structuredClone(DEFAULT_SETTINGS),
     questions: [],
     lastAttempt: null,
-    authReady: false,
   };
 
-  // ---- UI helpers ----
+  // ---------- UI ----------
   const $app = document.getElementById("app");
   const $toast = document.getElementById("toast");
   const $userTag = document.getElementById("userTag");
@@ -333,7 +447,7 @@
     return !!(state.user && state.user.isAnonymous);
   }
 
-  // ---- Auth modal (upgrade guest OR sign in/register) ----
+  // ---------- AUTH MODAL ----------
   function showAuthModal(){
     const guestNote = isGuest()
       ? `<span class="badge warn">You are currently browsing as Guest</span>
@@ -367,7 +481,7 @@
         <div class="card">
           <h2>${isGuest() ? "Register / Upgrade Guest" : "Create account"}</h2>
           <label>Display name</label>
-          <input id="su_name" type="text" placeholder="Username" autocomplete="name" />
+          <input id="su_name" type="text" placeholder="Arthur" autocomplete="name" />
           <div class="spacer"></div>
           <label>Email</label>
           <input id="su_email" type="email" placeholder="you@example.com" autocomplete="email" />
@@ -405,7 +519,6 @@
 
       try{
         if(isGuest()){
-          // Upgrade guest by linking credential to current anonymous user
           const cred = EmailAuthProvider.credential(email, pass);
           const linked = await linkWithCredential(auth.currentUser, cred);
           if(name) await updateProfile(linked.user, { displayName: name });
@@ -417,7 +530,6 @@
           }, { merge:true });
           toast("Guest upgraded.");
         } else {
-          // Normal register
           const created = await createUserWithEmailAndPassword(auth, email, pass);
           if(name) await updateProfile(created.user, { displayName: name });
           await setDoc(doc(db, "users", created.user.uid), {
@@ -440,14 +552,13 @@
     try{
       await signOut(auth);
       toast("Signed out (switching back to Guest).");
-      // onAuthStateChanged will automatically re-enter guest mode (anonymous sign-in)
       navTo("#/");
     }catch(e){
       toast("Sign out failed: " + (e?.message || e));
     }
   };
 
-  // ---- Firestore helpers ----
+  // ---------- FIRESTORE HELPERS ----------
   async function loadSettings(){
     try{
       const snap = await getDoc(doc(db, "settings", "scoring"));
@@ -507,59 +618,144 @@
     return out;
   }
 
-  // ---- Scoring ----
+  // ---------- SCORING + CLASSIFICATION ----------
   function sectorVec(sectorKey){
     const s = SECTORS.find(x=>x.key===sectorKey);
     if(!s) return { x:0, y:0, angleDeg:0 };
     const a = rad(s.angleDeg);
     return { x: Math.cos(a), y: Math.sin(a), angleDeg: s.angleDeg };
   }
+
+  function distAngDeg(a,b){
+    let d = Math.abs(a-b);
+    while(d>180) d = Math.abs(d-360);
+    return d;
+  }
+
+  function norm180(deg){
+    let d = deg;
+    while(d <= -180) d += 360;
+    while(d > 180) d -= 360;
+    return d;
+  }
+
   function getAnswerDef(key){ return state.settings.answerScale.find(a=>a.key===key) || null; }
   function getImportanceDef(n){
     return state.settings.importanceScale.find(i=>Number(i.key)===Number(n)) || state.settings.importanceScale[2];
   }
 
-  function classifyPoint(x,y){
-    const r = Math.hypot(x,y);
-    if(r <= state.settings.centerRadius){
-      return { sectorKey: GREY.key, sectorName: GREY.name, category:"Grey Center (Liminal)", radicalism:0, angleDeg:0, label:"Grey (Center)" };
-    }
-    const angle = Math.atan2(y,x);
-    let deg = angle * 180/Math.PI;
-    if(deg < -180) deg += 360;
-    if(deg > 180) deg -= 360;
-
-    const distAng = (a,b)=>{
-      let d = Math.abs(a-b);
-      while(d>180) d = Math.abs(d-360);
-      return d;
-    };
-    const nearest = SECTORS.map(s=>({ s, d: distAng(deg, s.angleDeg) })).sort((p,q)=>p.d-q.d)[0].s;
-    const arc = findArc(deg);
-    const radicalism = clamp(r,0,1);
-    const pure = (r >= state.settings.pureCornerRadius);
-
-    let label = pure ? `Pure Mono-Politics: ${nearest.name}` : `Composite/Mixed: ${arc.label}`;
-    return { sectorKey: nearest.key, sectorName: nearest.name, category: arc.label, radicalism, angleDeg: deg, label };
+  function nearestSector(deg){
+    const nearest = SECTORS
+      .map(s=>({ s, d: distAngDeg(deg, s.angleDeg) }))
+      .sort((p,q)=>p.d-q.d)[0].s;
+    return nearest;
   }
 
-  function findArc(deg){
-    const order = ["BROWN","BLUE","PURPLE","GREEN","RED","REDBROWN"];
-    const ang = key => SECTORS.find(s=>s.key===key).angleDeg;
-    const to360 = d => (d<0 ? d+360 : d);
-    const A = to360(deg);
+  function neighborKeys(sectorKey){
+    const i = ORDER.indexOf(sectorKey);
+    const prev = ORDER[(i - 1 + ORDER.length) % ORDER.length];
+    const next = ORDER[(i + 1) % ORDER.length];
+    return { prev, next };
+  }
 
-    // nearest sector (stable)
-    const nearest = SECTORS
-      .map(s=>({ s, d: Math.min(Math.abs(to360(s.angleDeg)-A), 360-Math.abs(to360(s.angleDeg)-A)) }))
-      .sort((p,q)=>p.d-q.d)[0].s;
+  function poleForPair(a,b){
+    return POLE_BY_PAIR.get(pairKey(a,b)) || null;
+  }
 
-    const pos = order.indexOf(nearest.key);
-    const next = order[(pos+1)%order.length];
-    const a = nearest.key;
-    const b = next;
-    const arc = CATEGORY_ARCS.find(x=>x.a===a && x.b===b) || CATEGORY_ARCS.find(x=>x.a===b && x.b===a) || { label:"Unclassified", a, b };
-    return arc;
+  function boundaryAngleBetween(aKey, bKey){
+    // adjacent sectors only (60° apart in this model)
+    const a = SECTORS.find(s=>s.key===aKey)?.angleDeg ?? 0;
+    const b = SECTORS.find(s=>s.key===bKey)?.angleDeg ?? 0;
+    // signed shortest delta
+    let delta = norm180(b - a);
+    // midpoint
+    return norm180(a + delta/2);
+  }
+
+  function nearestPole(deg){
+    return POLES
+      .map(p=>({ p, d: distAngDeg(deg, p.angleDeg === 180 ? -180 : p.angleDeg) }))
+      .sort((x,y)=>x.d-y.d)[0];
+  }
+
+  function classifyPoint(x,y){
+    const r = Math.hypot(x,y);
+    const radicalism = clamp(r,0,1);
+
+    if(r <= state.settings.centerRadius){
+      return {
+        sectorKey: CENTER.key,
+        sectorName: CENTER.name,
+        poleAName: null,
+        poleBName: null,
+        sliceTitle: null,
+        sliceText: "Low ideological drive or preference for pragmatism/apoliticism; outside the ring-of-ideology dynamics.",
+        category: CENTER.name,
+        label: CENTER.name,
+        radicalism,
+        angleDeg: 0,
+        poleName: null,
+      };
+    }
+
+    const angle = Math.atan2(y,x);
+    const deg = norm180(angle * 180/Math.PI);
+
+    // Pure pole snap (far from center AND near a pole border line)
+    const np = nearestPole(deg);
+    const poleSnap = Number(state.settings.poleSnapDeg ?? 7);
+    const pure = (r >= state.settings.pureCornerRadius) && (np.d <= poleSnap);
+
+    const near = nearestSector(deg);
+    const { prev, next } = neighborKeys(near.key);
+
+    const polePrev = poleForPair(near.key, prev);
+    const poleNext = poleForPair(near.key, next);
+
+    const bPrev = boundaryAngleBetween(near.key, prev);
+    const bNext = boundaryAngleBetween(near.key, next);
+
+    const dPrev = distAngDeg(deg, bPrev);
+    const dNext = distAngDeg(deg, bNext);
+
+    const toward = (dPrev <= dNext) ? prev : next;
+    const slice = SLICE_DEFS?.[near.key]?.[toward] || null;
+
+    if(pure){
+      return {
+        sectorKey: near.key,
+        sectorName: near.name,
+        poleAName: polePrev?.name || null,
+        poleBName: poleNext?.name || null,
+        sliceTitle: slice?.title || null,
+        sliceText: slice?.text || null,
+        category: np.p.name,
+        label: `Pure Mono-Politics: ${np.p.name}`,
+        radicalism,
+        angleDeg: deg,
+        poleName: np.p.name,
+      };
+    }
+
+    const bridge = (polePrev && poleNext)
+      ? `${polePrev.name} ↔ ${poleNext.name}`
+      : (polePrev?.name || poleNext?.name || "Unclassified");
+
+    const sliceLabel = slice?.title ? `${slice.title}` : `${near.name} sector`;
+
+    return {
+      sectorKey: near.key,
+      sectorName: near.name,
+      poleAName: polePrev?.name || null,
+      poleBName: poleNext?.name || null,
+      sliceTitle: slice?.title || null,
+      sliceText: slice?.text || null,
+      category: bridge,
+      label: sliceLabel,
+      radicalism,
+      angleDeg: deg,
+      poleName: null,
+    };
   }
 
   function computeScore(questions, answers){
@@ -668,14 +864,14 @@
     let x = rawX / maxSum;
     let y = rawY / maxSum;
 
-    const r = Math.hypot(x,y);
-    if(r > 1){ x /= r; y /= r; }
+    const rr = Math.hypot(x,y);
+    if(rr > 1){ x /= rr; y /= rr; }
 
     const cls = classifyPoint(x,y);
     return { x, y, r: Math.hypot(x,y), classification: cls, breakdown, synergyNotes, maxSum };
   }
 
-  // ---- Canvas drawing ----
+  // ---------- CANVAS DRAW ----------
   function hexToRgba(hex, a){
     const h = (hex||"").trim();
     if(h.startsWith("#") && (h.length===7)){
@@ -717,7 +913,7 @@
 
     ctx.beginPath();
     ctx.arc(cx,cy, R*state.settings.centerRadius, 0, Math.PI*2);
-    ctx.fillStyle = hexToRgba(GREY.color, 0.28);
+    ctx.fillStyle = hexToRgba(CENTER.color, 0.28);
     ctx.fill();
     ctx.strokeStyle = "rgba(255,255,255,.10)";
     ctx.stroke();
@@ -741,7 +937,7 @@
       ctx.fillText(s.name, lx, ly);
     }
     ctx.fillStyle = "rgba(233,238,252,.7)";
-    ctx.fillText("Grey", cx, cy);
+    ctx.fillText("Apoliticism", cx, cy);
 
     for(const p of points || []){
       const px = cx + p.x * R;
@@ -763,18 +959,27 @@
     }
   }
 
-  // ---- Pages ----
+  // ---------- PAGES ----------
   function renderHome(){
     $app.innerHTML = `
       <div class="grid cols2">
         <div class="card">
           <h2>What this is</h2>
           <div class="smallnote">
-            A 6-direction coordinate compass (Brown → Blue → Purple → Green → Red → Red-Brown, clockwise) with a grey liminal center.
-            Your position is computed as a weighted vector sum of your answers.
+            A 6-color coordinate compass with a <b>center of Apoliticism/Pragmatism</b>.
+            The borders between colors define the six “pole politics”:
             <div class="spacer"></div>
-            <span class="badge primary">Composite/Mixed</span> means you’re between adjacent regions (your “arc category”).
-            <span class="badge warn">Radicalism</span> is how far you are from the center (authority axis is intentionally implicit by distance).
+            <div class="list">
+              <div class="item"><span class="badge">Brown + Red-Brown</span> → <b>Third-Position Politics</b></div>
+              <div class="item"><span class="badge">Blue + Brown</span> → <b>Reactionary Politics</b></div>
+              <div class="item"><span class="badge">Purple + Blue</span> → <b>Right-wing Politics</b></div>
+              <div class="item"><span class="badge">Green + Purple</span> → <b>Centrist Politics</b></div>
+              <div class="item"><span class="badge">Red + Green</span> → <b>Left-wing Politics</b></div>
+              <div class="item"><span class="badge">Red-Brown + Red</span> → <b>Syncretic Politics</b></div>
+            </div>
+            <div class="spacer"></div>
+            Each colored sector is split into <b>two slices</b>, leaning toward one border-pole or the other.
+            Your result shows both the <b>color filter</b> and the <b>slice</b>.
           </div>
           <div class="hr"></div>
           <div class="row">
@@ -785,7 +990,6 @@
           <div class="spacer"></div>
           <div class="smallnote muted">
             Guest mode is automatic (anonymous auth). You don’t need an account to take the test, save attempts, share, or compare.
-            Suggestions/voting can be restricted to non-guest accounts (configurable via rules).
           </div>
         </div>
 
@@ -796,13 +1000,13 @@
           </div>
           <div class="spacer"></div>
           <div class="smallnote muted">
-            Tip: Make an attempt public to get a share link, then compare multiple attempts on one compass.
+            Tip: If you’re far from the center and close to a border line, the system labels it as “Pure Mono-Politics” of that pole.
           </div>
         </div>
       </div>
     `;
     drawCompass(document.getElementById("c_preview"), [
-      { x:0.00, y:0.00, label:"Center", color:"rgba(107,114,128,.95)" },
+      { x:0.00, y:0.00, label:"Apolitical", color:"rgba(107,114,128,.95)" },
       { x:0.62, y:0.18, label:"Example", color:"rgba(124,156,255,.95)" },
     ]);
   }
@@ -986,9 +1190,14 @@
             x: res.x, y: res.y, r: res.r,
             sectorKey: res.classification.sectorKey,
             sectorName: res.classification.sectorName,
+            poleAName: res.classification.poleAName,
+            poleBName: res.classification.poleBName,
+            poleName: res.classification.poleName, // present if snapped as pure pole
             category: res.classification.category,
             label: res.classification.label,
             radicalism: res.classification.radicalism,
+            sliceTitle: res.classification.sliceTitle,
+            sliceText: res.classification.sliceText,
             maxSum: res.maxSum,
             synergyNotes: res.synergyNotes,
             breakdown: res.breakdown,
@@ -1128,6 +1337,18 @@
     const sector = SECTORS.find(s=>s.key===c.sectorKey);
     const sectorColor = sector?.color || getCSS("--grey");
 
+    const poleLine = c.poleName ? `<span class="badge good">Pure pole: ${htmlEscape(c.poleName)}</span>` : "";
+    const bridgeLine = (!c.poleName && c.poleAName && c.poleBName)
+      ? `<span class="badge">Bridge: ${htmlEscape(c.poleAName)} ↔ ${htmlEscape(c.poleBName)}</span>`
+      : "";
+
+    const sliceBox = (c.sliceTitle || c.sliceText) ? `
+      <div class="item">
+        <div class="title">${htmlEscape(c.sliceTitle || "Slice")}</div>
+        <div class="smallnote muted" style="margin-top:6px">${htmlEscape(c.sliceText || "")}</div>
+      </div>
+    ` : "";
+
     $app.innerHTML = `
       <div class="grid cols2">
         <div class="card">
@@ -1137,22 +1358,31 @@
             <span class="badge primary">Y: <span class="mono">${c.y.toFixed(3)}</span></span>
             <span class="badge warn">Radicalism: <span class="mono">${c.r.toFixed(3)}</span></span>
           </div>
+
           <div class="spacer"></div>
           <div class="row">
             <span class="badge" style="border-color:${hexToRgba(sectorColor, .4)}; background:${hexToRgba(sectorColor,.12)}; color:#e9eefc">
-              Nearest sector: <b style="color:${sectorColor}">${htmlEscape(c.sectorName || c.sectorKey)}</b>
+              Color filter: <b style="color:${sectorColor}">${htmlEscape(c.sectorName || c.sectorKey)}</b>
             </span>
-            <span class="badge">${htmlEscape(c.category || "—")}</span>
+            <span class="badge primary">Label: ${htmlEscape(c.label || "—")}</span>
+            ${poleLine}
+            ${bridgeLine}
           </div>
+
+          <div class="spacer"></div>
+          ${sliceBox}
+
           <div class="spacer"></div>
           <div class="item">
-            <div class="title">${htmlEscape(c.label || "—")}</div>
+            <div class="title">${htmlEscape(c.category || "—")}</div>
             <div class="meta">Attempt: ${htmlEscape(attempt.id)} · ${htmlEscape(fmtTime(attempt.createdAt))}</div>
           </div>
+
           <div class="spacer"></div>
           <div class="canvasWrap">
             <canvas id="${canvasId}" width="520" height="520"></canvas>
           </div>
+
           <div class="spacer"></div>
 
           ${isMine ? `
@@ -1240,10 +1470,13 @@
     }
 
     const items = attempts.map(a=>{
-      const c = a.computed;
+      const c = a.computed || {};
       const badge = a.public ? `<span class="badge good">Public</span>` : `<span class="badge">Private</span>`;
       const sec = SECTORS.find(s=>s.key===c?.sectorKey);
       const col = sec?.color || getCSS("--grey");
+
+      const poleBadge = c.poleName ? `<span class="badge good">Pure: ${htmlEscape(c.poleName)}</span>` : "";
+
       return `
         <div class="item">
           <div class="top">
@@ -1253,13 +1486,15 @@
               </div>
               <div class="meta">
                 ${badge}
+                ${poleBadge}
                 <span class="badge">Time: ${htmlEscape(fmtTime(a.createdAt))}</span>
                 <span class="badge" style="border-color:${hexToRgba(col,.4)}; background:${hexToRgba(col,.12)}; color:#e9eefc">
-                  Sector: <b style="color:${col}">${htmlEscape(c?.sectorName || c?.sectorKey || "—")}</b>
+                  Filter: <b style="color:${col}">${htmlEscape(c?.sectorName || c?.sectorKey || "—")}</b>
                 </span>
                 <span class="badge primary">X <span class="mono">${Number(c?.x ?? 0).toFixed(3)}</span></span>
                 <span class="badge primary">Y <span class="mono">${Number(c?.y ?? 0).toFixed(3)}</span></span>
                 <span class="badge warn">R <span class="mono">${Number(c?.r ?? 0).toFixed(3)}</span></span>
+                <span class="badge">${htmlEscape(c?.category || "—")}</span>
               </div>
             </div>
             <div class="row">
@@ -1277,7 +1512,7 @@
           <h2>Your attempts</h2>
           <div class="smallnote muted">
             ${isGuest()
-              ? `You are currently a <b>Guest</b>. Attempts are still saved, but tied to this device/browser unless you upgrade.`
+              ? `You are currently a <b>Guest</b>. Attempts are saved but tied to this device/browser unless you upgrade.`
               : `Attempts are tied to your account UID and persist across devices.`
             }
           </div>
@@ -1380,6 +1615,7 @@
     const list = attempts.map((a,i)=>{
       const c = a.computed;
       const badge = a.public ? `<span class="badge good">Public</span>` : `<span class="badge">Private (yours)</span>`;
+      const pole = c.poleName ? `<span class="badge good">Pure: ${htmlEscape(c.poleName)}</span>` : "";
       return `
         <div class="item">
           <div class="top">
@@ -1390,6 +1626,7 @@
               </div>
               <div class="meta">
                 ${badge}
+                ${pole}
                 <span class="badge">Time: ${htmlEscape(fmtTime(a.createdAt))}</span>
                 <span class="badge primary">X <span class="mono">${c.x.toFixed(3)}</span></span>
                 <span class="badge primary">Y <span class="mono">${c.y.toFixed(3)}</span></span>
@@ -1413,8 +1650,6 @@
   }
 
   async function renderSuggest(){
-    // IMPORTANT: in this build, suggesting/voting is restricted to non-Guest accounts (to cut spam).
-    // Guest can still take test, save attempts, share/compare, view ledger.
     if(!state.user){
       $app.innerHTML = `<div class="card"><h2>Connecting…</h2><div class="smallnote muted">Guest session is loading.</div></div>`;
       return;
@@ -1461,7 +1696,7 @@
 
           <div class="spacer"></div>
           <label>Tags (comma-separated)</label>
-          <input id="s_tags" placeholder="e.g. nationalism, economy, religion, lgbtq, authority" />
+          <input id="s_tags" placeholder="e.g. nationalism, economy, religion, authority" />
           <div class="spacer"></div>
 
           <button id="s_submit" class="btn good" type="button">Submit suggestion</button>
@@ -1725,7 +1960,7 @@
       <div class="grid cols2">
         <div class="card">
           <h2>Questions</h2>
-          <div class="smallnote muted">Add/disable questions. Each question has: direction (sector), weight, tags.</div>
+          <div class="smallnote muted">Add/disable questions. Each question has: direction (color), weight, tags.</div>
           <div class="hr"></div>
 
           <label>Question text</label>
@@ -1745,7 +1980,7 @@
 
           <div class="spacer"></div>
           <label>Tags (comma-separated)</label>
-          <input id="q_tags" placeholder="e.g. economy, nationalism, religion, lgbtq, authority" />
+          <input id="q_tags" placeholder="e.g. economy, nationalism, religion, authority" />
           <div class="spacer"></div>
 
           <div class="row">
@@ -1921,12 +2156,11 @@
     await refreshQuestionList();
   }
 
-  // ---- Router render ----
+  // ---------- ROUTER ----------
   async function render(){
     const r = route();
     const [p0, p1] = r.parts;
 
-    // header state
     if(state.user){
       if(state.user.isAnonymous){
         $userTag.textContent = `Guest · ${state.user.uid.slice(0,8)}…`;
@@ -1954,7 +2188,7 @@
     return renderHome();
   }
 
-  // ---- Boot & Guest auto-signin ----
+  // ---------- BOOT / GUEST AUTO SIGN-IN ----------
   async function bootForUser(user){
     state.user = user;
     state.isAdmin = user ? await checkAdmin(user.uid) : false;
@@ -1967,14 +2201,12 @@
   onAuthStateChanged(auth, async (user)=>{
     try{
       if(!user){
-        // Automatic Guest mode: user never has to authenticate manually
         await signInAnonymously(auth);
-        return; // will re-trigger onAuthStateChanged
+        return;
       }
       await bootForUser(user);
     }catch(e){
       toast("Auth error: " + (e?.message || e));
-      // still render something
       state.user = null;
       state.isAdmin = false;
       await loadSettings();
@@ -1988,6 +2220,3 @@
 </script>
 </body>
 </html>
-
-
-
