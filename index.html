@@ -15,6 +15,8 @@
     }
     *{box-sizing:border-box}
     html,body{height:100%}
+    html, body{ color-scheme: dark; } /* helps native controls render dark on many browsers/OS */
+
     body{
       margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,Arial,sans-serif;
       background:radial-gradient(1200px 700px at 15% 5%, rgba(124,156,255,.12), transparent 55%),
@@ -103,6 +105,12 @@
       outline:none;
       font-size:13px;
     }
+    /* Fix: on some PCs the dropdown list renders with a light system background, so force option colors */
+    select option, select optgroup{
+      background: var(--panel);
+      color: var(--text);
+    }
+
     textarea{min-height:90px; resize:vertical}
     label{font-size:12px; color:var(--muted)}
     .kpi{display:grid; grid-template-columns:1fr 1fr; gap:10px;}
@@ -155,6 +163,38 @@
     .dangerText{color:#ff9aaa}
     .goodText{color:#b7ffd8}
     .warnText{color:#ffe0a8}
+
+    /* ===== Answer picker (radio chips) ===== */
+    .choiceGrid{
+      display:grid;
+      grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+      gap:8px;
+    }
+    .choice{
+      border:1px solid var(--line);
+      background:rgba(255,255,255,.03);
+      border-radius:12px;
+      padding:9px 10px;
+      cursor:pointer;
+      display:flex;
+      align-items:center;
+      gap:8px;
+      user-select:none;
+    }
+    .choice:hover{background:rgba(255,255,255,.06)}
+    .choice input{display:none}
+    .choice.active{
+      border-color:rgba(124,156,255,.45);
+      background:rgba(124,156,255,.14);
+    }
+    .choice .k{
+      font-size:11px;
+      padding:2px 7px;
+      border-radius:999px;
+      border:1px solid var(--line2);
+      color:var(--muted);
+      flex:0 0 auto;
+    }
   </style>
 </head>
 
@@ -876,7 +916,6 @@
           ctx.beginPath();
           ctx.moveTo(cx, cy);
           ctx.lineTo(ix, iy);
-          // ctx.setLineDash([6, 6]); // optional dashed
           ctx.strokeStyle = "rgba(255,255,255,.14)";
           ctx.lineWidth = 1;
           ctx.stroke();
@@ -1121,11 +1160,15 @@
             <div class="split">
               <div>
                 <label>Answer</label>
-                <select data-qid="${q.id}" data-field="choiceKey">
+                <div class="choiceGrid" data-qid="${q.id}" data-field="choiceKey">
                   ${answerOptions.map(opt=>`
-                    <option value="${opt.key}" ${opt.key===a.choiceKey ? "selected":""}>${htmlEscape(opt.label)}</option>
+                    <label class="choice ${opt.key===a.choiceKey ? "active":""}">
+                      <input type="radio" name="ans_${q.id}" value="${opt.key}" ${opt.key===a.choiceKey ? "checked":""}/>
+                      <span class="k">${htmlEscape(opt.key)}</span>
+                      <span>${htmlEscape(opt.label)}</span>
+                    </label>
                   `).join("")}
-                </select>
+                </div>
               </div>
               <div>
                 <label>Importance</label>
@@ -1142,12 +1185,31 @@
         `;
       }).join("");
 
-      $qList.querySelectorAll("select").forEach(sel=>{
+      // Answer radios
+      $qList.querySelectorAll('.choiceGrid[data-field="choiceKey"] input[type="radio"]').forEach(inp=>{
+        inp.addEventListener("change", ()=>{
+          const grid = inp.closest(".choiceGrid");
+          const qid = grid.getAttribute("data-qid");
+          answers[qid] = answers[qid] || { choiceKey:"N", importanceKey:3 };
+          answers[qid].choiceKey = inp.value;
+
+          // active styles
+          grid.querySelectorAll(".choice").forEach(l=>l.classList.remove("active"));
+          inp.closest(".choice").classList.add("active");
+
+          const preview = computeScore(qs, answers);
+          updateLive(preview);
+          localStorage.setItem(key, JSON.stringify(answers));
+        });
+      });
+
+      // Importance selects (keep native)
+      $qList.querySelectorAll('select[data-field="importanceKey"]').forEach(sel=>{
         sel.addEventListener("change", ()=>{
           const qid = sel.getAttribute("data-qid");
-          const field = sel.getAttribute("data-field");
           answers[qid] = answers[qid] || { choiceKey:"N", importanceKey:3 };
-          answers[qid][field] = (field === "importanceKey") ? Number(sel.value) : sel.value;
+          answers[qid].importanceKey = Number(sel.value);
+
           const preview = computeScore(qs, answers);
           updateLive(preview);
           localStorage.setItem(key, JSON.stringify(answers));
