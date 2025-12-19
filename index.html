@@ -776,105 +776,138 @@
   }
 
   function drawCompass(canvas, points){
-    const ctx = canvas.getContext("2d");
-    const W = canvas.width, H = canvas.height;
-    ctx.clearRect(0,0,W,H);
+  const ctx = canvas.getContext("2d");
+  const W = canvas.width, H = canvas.height;
+  ctx.clearRect(0,0,W,H);
 
-    const cx = W/2, cy = H/2;
-    const R = Math.min(W,H) * 0.42;
+  const cx = W/2, cy = H/2;
+  const R = Math.min(W,H) * 0.42;
 
-    // ---- Draw colour sectors using POLE BORDERS (start/end) ----
-    // This fixes the "shift" so corners match borders exactly.
-    for(const sr of SECTOR_RANGES){
-      const sector = SECTORS.find(s=>s.key===sr.sectorKey);
-      const pStart = pointOnCircle(cx, cy, R, sr.start);
-      const pEnd   = pointOnCircle(cx, cy, R, sr.end === 360 ? 0 : sr.end);
+  // Sort poles by angle so we draw a proper hex
+  const poles = POLES.slice().sort((a,b)=>a.angle360 - b.angle360);
 
-      ctx.beginPath();
-      ctx.moveTo(cx,cy);
-      ctx.lineTo(pStart.x, pStart.y);
-      ctx.lineTo(pEnd.x, pEnd.y);
-      ctx.closePath();
-      ctx.fillStyle = hexToRgba(sector?.color || "#999999", 0.22);
-      ctx.fill();
-      ctx.strokeStyle = "rgba(255,255,255,.08)";
-      ctx.stroke();
-    }
+  // Hex corners are now POLES (this is the "shift" you want)
+  const poleVerts = poles.map(p=>{
+    const a = rad(p.angle360);
+    return { p, x: cx + Math.cos(a)*R, y: cy - Math.sin(a)*R };
+  });
 
-    // grey center
+  // Fill each colour sector as the bridge BETWEEN adjacent pole corners
+  for(let i=0;i<poleVerts.length;i++){
+    const v1 = poleVerts[i];
+    const v2 = poleVerts[(i+1) % poleVerts.length];
+
+    const startPoleKey = v1.p.key;
+    const endPoleKey   = v2.p.key;
+
+    // Find which colour-sector bridges these two poles
+    const sr =
+      SECTOR_RANGES.find(r=>r.startPole === startPoleKey && r.endPole === endPoleKey) ||
+      // Fallback (shouldn't happen, but keeps rendering safe)
+      SECTOR_RANGES[0];
+
+    const sector = SECTORS.find(s=>s.key === sr.sectorKey);
+
     ctx.beginPath();
-    ctx.arc(cx,cy, R*state.settings.centerRadius, 0, Math.PI*2);
-    ctx.fillStyle = hexToRgba(GREY.color, 0.28);
+    ctx.moveTo(cx, cy);
+    ctx.lineTo(v1.x, v1.y);
+    ctx.lineTo(v2.x, v2.y);
+    ctx.closePath();
+
+    ctx.fillStyle = hexToRgba(sector?.color || "#999999", 0.22);
     ctx.fill();
+    ctx.strokeStyle = "rgba(255,255,255,.08)";
+    ctx.stroke();
+  }
+
+  // Grey center (liminal)
+  ctx.beginPath();
+  ctx.arc(cx,cy, R*state.settings.centerRadius, 0, Math.PI*2);
+  ctx.fillStyle = hexToRgba(GREY.color, 0.28);
+  ctx.fill();
+  ctx.strokeStyle = "rgba(255,255,255,.10)";
+  ctx.stroke();
+
+  // Guide circles
+  for(const k of [0.25, 0.5, 0.75, 1.0]){
+    ctx.beginPath();
+    ctx.arc(cx,cy, R*k, 0, Math.PI*2);
+    ctx.strokeStyle = "rgba(255,255,255,.06)";
+    ctx.stroke();
+  }
+
+  // Draw hex outline (corners are poles)
+  ctx.beginPath();
+  ctx.moveTo(poleVerts[0].x, poleVerts[0].y);
+  for(let i=1;i<poleVerts.length;i++){
+    ctx.lineTo(poleVerts[i].x, poleVerts[i].y);
+  }
+  ctx.closePath();
+  ctx.lineWidth = 1.5;
+  ctx.strokeStyle = "rgba(255,255,255,.12)";
+  ctx.stroke();
+
+  // Draw pole rays + pole labels at the corners
+  ctx.lineWidth = 1;
+  for(const v of poleVerts){
+    // Ray
+    ctx.beginPath();
+    ctx.moveTo(cx,cy);
+    ctx.lineTo(v.x,v.y);
     ctx.strokeStyle = "rgba(255,255,255,.10)";
     ctx.stroke();
 
-    // guide circles
-    for(const k of [0.25, 0.5, 0.75, 1.0]){
-      ctx.beginPath();
-      ctx.arc(cx,cy, R*k, 0, Math.PI*2);
-      ctx.strokeStyle = "rgba(255,255,255,.06)";
-      ctx.stroke();
-    }
+    // Label slightly outside the corner
+    const a = rad(v.p.angle360);
+    const lx = cx + Math.cos(a)*(R*1.15);
+    const ly = cy - Math.sin(a)*(R*1.15);
 
-    // pole rays + pole labels (these are the CORNERS between the colour sectors)
-    ctx.lineWidth = 1;
-    for(const p of POLES){
-      const p2 = pointOnCircle(cx, cy, R, p.angle360);
-
-      ctx.beginPath();
-      ctx.moveTo(cx,cy);
-      ctx.lineTo(p2.x,p2.y);
-      ctx.strokeStyle = "rgba(255,255,255,.12)";
-      ctx.stroke();
-
-      const lab = pointOnCircle(cx, cy, R*1.16, p.angle360);
-      ctx.font = "12px system-ui";
-      ctx.fillStyle = "rgba(233,238,252,.84)";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText(p.name.replace(" Politics",""), lab.x, lab.y);
-    }
-
-    // sector labels (filter names) at sector centers
-    for(const s of SECTORS){
-      const a360 = to360(s.angleDeg);
-      const lab = pointOnCircle(cx, cy, R*0.58, a360);
-      ctx.font = "11px system-ui";
-      ctx.fillStyle = "rgba(233,238,252,.70)";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText(s.name, lab.x, lab.y);
-    }
-
-    // center label
     ctx.font = "12px system-ui";
+    ctx.fillStyle = "rgba(233,238,252,.82)";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(v.p.name.replace(" Politics",""), lx, ly);
+  }
+
+  // Label sector/filter names inside wedges (use sector center angles)
+  for(const s of SECTORS){
+    const a = rad(to360(s.angleDeg)); // safe for negatives
+    const lx = cx + Math.cos(a)*(R*0.58);
+    const ly = cy - Math.sin(a)*(R*0.58);
+    ctx.font = "11px system-ui";
     ctx.fillStyle = "rgba(233,238,252,.70)";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText("Grey", cx, cy);
-
-    // points
-    for(const p of points || []){
-      const px = cx + p.x * R;
-      const py = cy - p.y * R;
-      ctx.beginPath();
-      ctx.arc(px,py, 6, 0, Math.PI*2);
-      ctx.fillStyle = p.color || "rgba(124,156,255,.95)";
-      ctx.fill();
-      ctx.lineWidth = 2;
-      ctx.strokeStyle = "rgba(0,0,0,.55)";
-      ctx.stroke();
-
-      if(p.label){
-        ctx.font = "12px system-ui";
-        ctx.fillStyle = "rgba(233,238,252,.9)";
-        ctx.textAlign = "left";
-        ctx.fillText(p.label, px + 10, py - 10);
-      }
-    }
+    ctx.fillText(s.name, lx, ly);
   }
 
+  // Center label
+  ctx.font = "12px system-ui";
+  ctx.fillStyle = "rgba(233,238,252,.70)";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText("Grey", cx, cy);
+
+  // Points
+  for(const p of points || []){
+    const px = cx + p.x * R;
+    const py = cy - p.y * R;
+    ctx.beginPath();
+    ctx.arc(px,py, 6, 0, Math.PI*2);
+    ctx.fillStyle = p.color || "rgba(124,156,255,.95)";
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = "rgba(0,0,0,.55)";
+    ctx.stroke();
+
+    if(p.label){
+      ctx.font = "12px system-ui";
+      ctx.fillStyle = "rgba(233,238,252,.9)";
+      ctx.textAlign = "left";
+      ctx.fillText(p.label, px + 10, py - 10);
+    }
+  }
+}
   // ============================
   // PAGES / ROUTER (unchanged)
   // ============================
@@ -2135,3 +2168,4 @@
 </script>
 </body>
 </html>
+
