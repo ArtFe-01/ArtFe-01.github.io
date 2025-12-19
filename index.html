@@ -1,0 +1,2124 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Hexa-Political Compass</title>
+  <meta name="description" content="Hexa-Political Compass — coordinate-based politico-ideological classification." />
+  <style>
+    :root{
+      --bg:#0b0e14; --panel:#0f1522; --panel2:#111a2b; --text:#e9eefc; --muted:#a7b1c7;
+      --line:rgba(255,255,255,.10); --line2:rgba(255,255,255,.06);
+      --btn:#1f2a44; --btn2:#233155; --accent:#7c9cff; --good:#44ef9a; --bad:#ff5a73;
+      --warn:#ffc14d;
+      --brown:#8b5a2b; --blue:#3b82f6; --purple:#8b5cf6; --green:#22c55e; --red:#ef4444; --redbrown:#b45309; --grey:#6b7280;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,Arial,sans-serif;
+      background:radial-gradient(1200px 700px at 15% 5%, rgba(124,156,255,.12), transparent 55%),
+                 radial-gradient(900px 700px at 85% 25%, rgba(34,197,94,.10), transparent 60%),
+                 radial-gradient(900px 900px at 70% 90%, rgba(239,68,68,.08), transparent 60%),
+                 var(--bg);
+      color:var(--text);
+    }
+    a{color:var(--accent); text-decoration:none}
+    a:hover{text-decoration:underline}
+    header{
+      position:sticky; top:0; z-index:50;
+      backdrop-filter: blur(10px);
+      background:rgba(11,14,20,.55);
+      border-bottom:1px solid var(--line);
+    }
+    .wrap{max-width:1150px; margin:0 auto; padding:16px}
+    .nav{
+      display:flex; align-items:center; gap:12px; flex-wrap:wrap;
+      justify-content:space-between;
+    }
+    .brand{display:flex; align-items:center; gap:10px}
+    .logo{
+      width:34px; height:34px; border-radius:10px;
+      background:linear-gradient(135deg, rgba(124,156,255,.9), rgba(34,197,94,.75));
+      box-shadow:0 10px 30px rgba(0,0,0,.25);
+    }
+    .brand h1{font-size:16px; margin:0}
+    .brand .sub{font-size:12px; color:var(--muted); margin-top:2px}
+    .links{display:flex; gap:8px; flex-wrap:wrap; align-items:center}
+    .pill{
+      padding:8px 10px; border:1px solid var(--line); border-radius:999px;
+      background:rgba(255,255,255,.03);
+      font-size:13px; color:var(--text);
+      display:inline-flex; gap:8px; align-items:center;
+    }
+    .pill:hover{background:rgba(255,255,255,.06)}
+    .pill.primary{border-color:rgba(124,156,255,.35); background:rgba(124,156,255,.10)}
+    .pill.danger{border-color:rgba(255,90,115,.35); background:rgba(255,90,115,.10)}
+    .pill.good{border-color:rgba(68,239,154,.35); background:rgba(68,239,154,.10)}
+    .pill.warn{border-color:rgba(255,193,77,.35); background:rgba(255,193,77,.10)}
+    .rightMeta{display:flex; gap:10px; align-items:center; flex-wrap:wrap}
+    .userTag{
+      padding:7px 10px; border-radius:999px;
+      border:1px solid var(--line2); background:rgba(255,255,255,.02);
+      font-size:12px; color:var(--muted);
+    }
+    main{padding:18px 0 80px}
+    .grid{display:grid; gap:14px}
+    @media(min-width:980px){
+      .grid.cols2{grid-template-columns: 1.1fr .9fr}
+      .grid.cols3{grid-template-columns: 1fr 1fr 1fr}
+    }
+    .card{
+      background:linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.01));
+      border:1px solid var(--line);
+      border-radius:18px;
+      padding:14px;
+      box-shadow:0 22px 70px rgba(0,0,0,.30);
+    }
+    .card h2{margin:0 0 8px; font-size:16px}
+    .muted{color:var(--muted)}
+    .row{display:flex; gap:10px; align-items:center; flex-wrap:wrap}
+    .spacer{height:10px}
+    .btn{
+      cursor:pointer;
+      border:1px solid var(--line);
+      background:rgba(255,255,255,.03);
+      color:var(--text);
+      padding:10px 12px;
+      border-radius:12px;
+      font-size:13px;
+      display:inline-flex; align-items:center; gap:8px;
+    }
+    .btn:hover{background:rgba(255,255,255,.06)}
+    .btn.primary{border-color:rgba(124,156,255,.35); background:rgba(124,156,255,.12)}
+    .btn.good{border-color:rgba(68,239,154,.35); background:rgba(68,239,154,.12)}
+    .btn.danger{border-color:rgba(255,90,115,.35); background:rgba(255,90,115,.12)}
+    .btn.warn{border-color:rgba(255,193,77,.35); background:rgba(255,193,77,.10)}
+    .btn.small{padding:7px 9px; font-size:12px; border-radius:10px}
+    .btn:disabled{opacity:.5; cursor:not-allowed}
+    input,select,textarea{
+      width:100%;
+      border:1px solid var(--line);
+      background:rgba(0,0,0,.18);
+      color:var(--text);
+      padding:10px 12px;
+      border-radius:12px;
+      outline:none;
+      font-size:13px;
+    }
+    textarea{min-height:90px; resize:vertical}
+    label{font-size:12px; color:var(--muted)}
+    .kpi{
+      display:grid; grid-template-columns:1fr 1fr; gap:10px;
+    }
+    .kpi .box{
+      border:1px solid var(--line2);
+      background:rgba(255,255,255,.02);
+      border-radius:14px;
+      padding:10px;
+    }
+    .kpi .box .t{font-size:11px; color:var(--muted)}
+    .kpi .box .v{font-size:16px; margin-top:6px}
+    .hr{border-top:1px solid var(--line2); margin:12px 0}
+    .list{display:flex; flex-direction:column; gap:10px}
+    .item{
+      border:1px solid var(--line2);
+      background:rgba(255,255,255,.02);
+      border-radius:14px;
+      padding:10px;
+    }
+    .item .top{display:flex; align-items:flex-start; justify-content:space-between; gap:10px}
+    .item .title{font-size:13px; margin:0}
+    .item .meta{font-size:12px; color:var(--muted)}
+    .badge{
+      font-size:11px; padding:4px 8px; border-radius:999px;
+      border:1px solid var(--line2);
+      background:rgba(255,255,255,.03);
+      color:var(--muted);
+      display:inline-flex; gap:6px; align-items:center;
+    }
+    .badge.good{border-color:rgba(68,239,154,.25); background:rgba(68,239,154,.10); color:#bfffe0}
+    .badge.warn{border-color:rgba(255,193,77,.25); background:rgba(255,193,77,.10); color:#ffe0a8}
+    .badge.bad{border-color:rgba(255,90,115,.25); background:rgba(255,90,115,.10); color:#ffd0d7}
+    .badge.primary{border-color:rgba(124,156,255,.25); background:rgba(124,156,255,.10); color:#d7e2ff}
+    .table{
+      width:100%; border-collapse:separate; border-spacing:0;
+      overflow:hidden; border-radius:14px;
+      border:1px solid var(--line2);
+      background:rgba(255,255,255,.02);
+    }
+    .table th,.table td{
+      padding:10px 10px; font-size:12px; border-bottom:1px solid var(--line2); vertical-align:top;
+    }
+    .table th{color:var(--muted); font-weight:600; text-align:left; background:rgba(255,255,255,.02)}
+    .table tr:last-child td{border-bottom:none}
+    .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace}
+    .canvasWrap{display:flex; justify-content:center}
+    canvas{max-width:100%; background:rgba(0,0,0,.18); border:1px solid var(--line); border-radius:18px}
+    .smallnote{font-size:12px; color:var(--muted); line-height:1.35}
+    .toast{
+      position:fixed; left:50%; bottom:18px; transform:translateX(-50%);
+      background:rgba(15,21,34,.9); border:1px solid var(--line);
+      padding:10px 12px; border-radius:12px;
+      box-shadow:0 18px 60px rgba(0,0,0,.45);
+      color:var(--text); font-size:13px;
+      display:none;
+      max-width:min(92vw, 700px);
+    }
+    .split{
+      display:grid; gap:14px;
+    }
+    @media(min-width:980px){
+      .split{grid-template-columns:1fr 1fr}
+    }
+    .chips{display:flex; flex-wrap:wrap; gap:6px}
+    .chip{
+      font-size:11px; padding:4px 8px; border-radius:999px;
+      border:1px solid var(--line2);
+      background:rgba(255,255,255,.02); color:var(--muted);
+    }
+    .dangerText{color:#ff9aaa}
+    .goodText{color:#b7ffd8}
+    .warnText{color:#ffe0a8}
+  </style>
+</head>
+
+<body>
+<header>
+  <div class="wrap">
+    <div class="nav">
+      <div class="brand">
+        <div class="logo"></div>
+        <div>
+          <h1>Hexa-Political Compass</h1>
+          <div class="sub">Coordinate-based politico-ideological classification (6 sectors + grey center)</div>
+        </div>
+      </div>
+
+      <div class="links">
+        <a class="pill" href="#/">Home</a>
+        <a class="pill primary" href="#/quiz">Take Test</a>
+        <a class="pill" href="#/ledger">Result Ledger</a>
+        <a class="pill" href="#/suggest">Suggest Questions</a>
+        <a class="pill" href="#/compare">Compare</a>
+        <a id="adminLink" class="pill warn" href="#/admin" style="display:none;">Admin</a>
+      </div>
+
+      <div class="rightMeta">
+        <span id="userTag" class="userTag">Not signed in</span>
+        <button id="authBtn" class="pill good" type="button">Sign in</button>
+        <button id="signOutBtn" class="pill danger" type="button" style="display:none;">Sign out</button>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main>
+  <div class="wrap">
+    <div id="app"></div>
+  </div>
+</main>
+
+<div id="toast" class="toast"></div>
+
+<script type="module">
+  // Hexa-Political Compass — GitHub Pages + Firebase (Auth + Firestore)
+  // IMPORTANT:
+  // 1) Replace firebaseConfig below.
+  // 2) Add your GitHub Pages domain to Firebase Auth "Authorized domains".
+  // 3) Set Firestore Security Rules (see firestore.rules provided separately).
+
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.7.0/firebase-app.js";
+  import {
+    getAuth, onAuthStateChanged,
+    signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, updateProfile
+  } from "https://www.gstatic.com/firebasejs/12.7.0/firebase-auth.js";
+  import {
+    getFirestore, doc, getDoc, setDoc, updateDoc, addDoc,
+    collection, query, where, orderBy, limit, getDocs,
+    serverTimestamp, Timestamp,
+    runTransaction, increment
+  } from "https://www.gstatic.com/firebasejs/12.7.0/firebase-firestore.js";
+
+  // ---- Firebase config (REPLACE THIS) ----
+  const firebaseConfig = {
+    apiKey: "REPLACE_ME",
+    authDomain: "REPLACE_ME.firebaseapp.com",
+    projectId: "REPLACE_ME",
+    appId: "REPLACE_ME",
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+
+  // ---- Model: sectors (clockwise): Brown, Blue, Purple, Green, Red, Red-Brown; center is Grey ----
+  const SECTORS = [
+    { key: "BROWN",     name: "Brown",      color: getCSS("--brown"),    angleDeg:  90 },
+    { key: "BLUE",      name: "Blue",       color: getCSS("--blue"),     angleDeg:  30 },
+    { key: "PURPLE",    name: "Purple",     color: getCSS("--purple"),   angleDeg: -30 },
+    { key: "GREEN",     name: "Green",      color: getCSS("--green"),    angleDeg: -90 },
+    { key: "RED",       name: "Red",        color: getCSS("--red"),      angleDeg: -150 },
+    { key: "REDBROWN",  name: "Red-Brown",  color: getCSS("--redbrown"), angleDeg: 150 },
+  ];
+  const GREY = { key: "GREY", name:"Grey (Center)", color:getCSS("--grey") };
+
+  const CATEGORY_ARCS = [
+    // Adjacent pair categories (matching your draft)
+    { a:"BROWN",    b:"BLUE",     label:"Reactionary Politics" },
+    { a:"BLUE",     b:"PURPLE",   label:"Right-wing Politics" },
+    { a:"PURPLE",   b:"GREEN",    label:"Centrist Politics" },
+    { a:"GREEN",    b:"RED",      label:"Left-wing Politics" },
+    { a:"RED",      b:"REDBROWN", label:"Syncretic Politics" },
+    { a:"REDBROWN", b:"BROWN",    label:"Third-Position Politics" },
+  ];
+
+  function getCSS(varName){
+    return getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
+  }
+  function rad(deg){ return deg * Math.PI / 180; }
+  function clamp(x,a,b){ return Math.max(a, Math.min(b, x)); }
+
+  // ---- Default scoring settings (admin can override in Firestore) ----
+  const DEFAULT_SETTINGS = {
+    answerScale: [
+      { key:"SD", label:"Strongly Disagree", value:-1.0 },
+      { key:"D",  label:"Disagree",          value:-0.8 },
+      { key:"MD", label:"Mildly Disagree",   value:-0.6 },
+      { key:"LD", label:"Lean Disagree",     value:-0.3 },
+
+      { key:"N",  label:"Neutral",           value: 0.0, special:"neutral" },
+      { key:"A",  label:"Ambivalent",        value: 0.0, special:"ambivalent" },
+      { key:"NA", label:"Non-Applicable",    value: 0.0, special:"na" },
+
+      { key:"LA", label:"Lean Agree",        value: 0.3 },
+      { key:"MA", label:"Mildly Agree",      value: 0.6 },
+      { key:"AG", label:"Agree",             value: 0.8 },
+      { key:"SA", label:"Strongly Agree",    value: 1.0 },
+    ],
+    importanceScale: [
+      { key:1, label:"Low importance",    mult:0.6 },
+      { key:2, label:"Somewhat important",mult:0.85 },
+      { key:3, label:"Important",         mult:1.0 },
+      { key:4, label:"Very important",    mult:1.15 },
+      { key:5, label:"Core / defining",   mult:1.3 },
+    ],
+    synergy: {
+      enabled: true,
+      neutralStrength: 0.35,    // how strongly "Neutral" gets inferred from tag-consistency
+      ambivalentStrength: 0.20, // how strongly "Ambivalent" gets inferred
+      threshold: 0.25,          // tag stance abs(value) needed before inference applies
+    },
+    centerRadius: 0.12,          // within this => Grey center
+    pureCornerRadius: 0.82,      // beyond this => "Pure" lean
+  };
+
+  const state = {
+    user: null,
+    isAdmin: false,
+    settings: structuredClone(DEFAULT_SETTINGS),
+    questions: [],
+    lastAttempt: null,
+  };
+
+  // ---- UI helpers ----
+  const $app = document.getElementById("app");
+  const $toast = document.getElementById("toast");
+  const $userTag = document.getElementById("userTag");
+  const $authBtn = document.getElementById("authBtn");
+  const $signOutBtn = document.getElementById("signOutBtn");
+  const $adminLink = document.getElementById("adminLink");
+
+  function toast(msg, ms=2600){
+    $toast.textContent = msg;
+    $toast.style.display = "block";
+    clearTimeout(toast._t);
+    toast._t = setTimeout(()=> $toast.style.display = "none", ms);
+  }
+
+  function htmlEscape(s){
+    return String(s ?? "")
+      .replaceAll("&","&amp;").replaceAll("<","&lt;")
+      .replaceAll(">","&gt;").replaceAll('"',"&quot;")
+      .replaceAll("'","&#39;");
+  }
+
+  function fmtTime(ts){
+    if(!ts) return "";
+    const d = ts instanceof Date ? ts : (ts.toDate ? ts.toDate() : new Date(ts));
+    return d.toLocaleString(undefined, { year:"numeric", month:"short", day:"2-digit", hour:"2-digit", minute:"2-digit" });
+  }
+
+  function route(){
+    const raw = location.hash.replace(/^#\/?/, "");
+    const [pathPart, queryPart] = raw.split("?");
+    const parts = (pathPart || "").split("/").filter(Boolean);
+    const q = new URLSearchParams(queryPart || "");
+    return { parts, q, raw };
+  }
+
+  function navTo(hash){ location.hash = hash; }
+
+  // ---- Auth modal ----
+  function showAuthModal(){
+    $app.innerHTML = `
+      <div class="grid cols2">
+        <div class="card">
+          <h2>Sign in</h2>
+          <div class="smallnote">Email/password authentication (Firebase Auth). Add your GitHub Pages domain as an authorized domain in Firebase Auth settings.</div>
+          <div class="spacer"></div>
+
+          <label>Email</label>
+          <input id="si_email" type="email" placeholder="you@example.com" autocomplete="email" />
+          <div class="spacer"></div>
+          <label>Password</label>
+          <input id="si_pass" type="password" placeholder="••••••••" autocomplete="current-password" />
+          <div class="spacer"></div>
+          <button id="si_btn" class="btn good" type="button">Sign in</button>
+          <button class="btn" type="button" onclick="location.hash='#/'">Cancel</button>
+          <div class="spacer"></div>
+          <div class="smallnote muted">If you forget your password, use Firebase console to enable password reset emails (optional).</div>
+        </div>
+
+        <div class="card">
+          <h2>Create account</h2>
+          <label>Display name</label>
+          <input id="su_name" type="text" placeholder="Arthur" autocomplete="name" />
+          <div class="spacer"></div>
+          <label>Email</label>
+          <input id="su_email" type="email" placeholder="you@example.com" autocomplete="email" />
+          <div class="spacer"></div>
+          <label>Password</label>
+          <input id="su_pass" type="password" placeholder="At least 6 characters" autocomplete="new-password" />
+          <div class="spacer"></div>
+          <button id="su_btn" class="btn primary" type="button">Register</button>
+          <div class="spacer"></div>
+          <div class="smallnote muted">After registering, an admin can grant admin status by creating a Firestore document: <span class="mono">admins/&lt;uid&gt;</span>.</div>
+        </div>
+      </div>
+    `;
+
+    document.getElementById("si_btn").onclick = async ()=>{
+      const email = document.getElementById("si_email").value.trim();
+      const pass = document.getElementById("si_pass").value;
+      if(!email || !pass) return toast("Email + password required.");
+      try{
+        await signInWithEmailAndPassword(auth, email, pass);
+        toast("Signed in.");
+        navTo("#/");
+      }catch(e){
+        toast("Sign in failed: " + (e?.message || e));
+      }
+    };
+
+    document.getElementById("su_btn").onclick = async ()=>{
+      const name = document.getElementById("su_name").value.trim();
+      const email = document.getElementById("su_email").value.trim();
+      const pass = document.getElementById("su_pass").value;
+      if(!email || !pass) return toast("Email + password required.");
+      try{
+        const cred = await createUserWithEmailAndPassword(auth, email, pass);
+        if(name){
+          await updateProfile(cred.user, { displayName: name });
+        }
+        await setDoc(doc(db, "users", cred.user.uid), {
+          displayName: name || "",
+          email,
+          createdAt: serverTimestamp(),
+        }, { merge:true });
+        toast("Account created.");
+        navTo("#/");
+      }catch(e){
+        toast("Register failed: " + (e?.message || e));
+      }
+    };
+  }
+
+  $authBtn.onclick = ()=> navTo("#/login");
+  $signOutBtn.onclick = async ()=>{
+    try{ await signOut(auth); toast("Signed out."); navTo("#/"); }
+    catch(e){ toast("Sign out failed: " + (e?.message || e)); }
+  };
+
+  // ---- Firestore helpers ----
+  async function loadSettings(){
+    try{
+      const snap = await getDoc(doc(db, "settings", "scoring"));
+      if(snap.exists()){
+        const data = snap.data();
+        // merge shallowly, but keep defaults for missing keys
+        state.settings = deepMerge(structuredClone(DEFAULT_SETTINGS), data);
+      }else{
+        state.settings = structuredClone(DEFAULT_SETTINGS);
+      }
+    }catch(e){
+      // fail closed to defaults
+      state.settings = structuredClone(DEFAULT_SETTINGS);
+    }
+  }
+
+  async function loadQuestions(){
+    const qs = [];
+    try{
+      const qref = query(
+        collection(db, "questions"),
+        where("enabled","==", true),
+        orderBy("createdAt","asc"),
+        limit(500)
+      );
+      const snap = await getDocs(qref);
+      snap.forEach(d=> qs.push({ id:d.id, ...d.data() }));
+    }catch(e){
+      // if no index yet, try a simpler fetch
+      try{
+        const snap = await getDocs(collection(db, "questions"));
+        snap.forEach(d=>{
+          const data = d.data();
+          if(data.enabled === true) qs.push({ id:d.id, ...data });
+        });
+        qs.sort((a,b)=> (a.createdAt?.seconds||0) - (b.createdAt?.seconds||0));
+      }catch(_){}
+    }
+    state.questions = qs;
+  }
+
+  async function checkAdmin(uid){
+    if(!uid) return false;
+    try{
+      const snap = await getDoc(doc(db, "admins", uid));
+      return snap.exists();
+    }catch(e){
+      return false;
+    }
+  }
+
+  function deepMerge(base, patch){
+    if(patch == null) return base;
+    if(Array.isArray(base) && Array.isArray(patch)) return patch; // admin fully controls arrays
+    if(typeof base !== "object" || typeof patch !== "object") return patch;
+    const out = Array.isArray(base) ? [...base] : { ...base };
+    for(const k of Object.keys(patch)){
+      out[k] = deepMerge(base?.[k], patch[k]);
+    }
+    return out;
+  }
+
+  // ---- Scoring ----
+  function sectorVec(sectorKey){
+    const s = SECTORS.find(x=>x.key===sectorKey);
+    if(!s) return { x:0, y:0, angleDeg:0 };
+    const a = rad(s.angleDeg);
+    return { x: Math.cos(a), y: Math.sin(a), angleDeg: s.angleDeg };
+  }
+
+  function getAnswerDef(key){
+    return state.settings.answerScale.find(a=>a.key===key) || null;
+  }
+
+  function getImportanceDef(n){
+    return state.settings.importanceScale.find(i=>Number(i.key)===Number(n)) || state.settings.importanceScale[2];
+  }
+
+  function classifyPoint(x,y){
+    const r = Math.hypot(x,y);
+    if(r <= state.settings.centerRadius){
+      return {
+        sectorKey: GREY.key,
+        sectorName: GREY.name,
+        category: "Grey Center (Liminal)",
+        radicalism: 0,
+        angleDeg: 0,
+        label: "Grey (Center)"
+      };
+    }
+
+    const angle = Math.atan2(y,x); // radians
+    let deg = angle * 180/Math.PI;
+    if(deg < -180) deg += 360;
+    if(deg > 180) deg -= 360;
+
+    // Find nearest sector by angular distance
+    const distAng = (a,b)=>{
+      let d = Math.abs(a-b);
+      while(d>180) d = Math.abs(d-360);
+      return d;
+    };
+    const nearest = SECTORS
+      .map(s=>({ s, d: distAng(deg, s.angleDeg) }))
+      .sort((p,q)=>p.d-q.d)[0].s;
+
+    // Determine which adjacent arc the point lies in
+    const arc = findArc(deg);
+
+    const radicalism = clamp(r,0,1);
+    const pure = (r >= state.settings.pureCornerRadius);
+
+    let label = pure ? `Pure ${nearest.name}` : `Mixed ${arc.label.replace(" Politics","")}`;
+    // Keep your mono/mixed language explicit
+    if(pure) label = `Pure Mono-Politics: ${nearest.name}`;
+    else label = `Composite/Mixed: ${arc.label}`;
+
+    return {
+      sectorKey: nearest.key,
+      sectorName: nearest.name,
+      category: arc.label,
+      radicalism,
+      angleDeg: deg,
+      label
+    };
+  }
+
+  function findArc(deg){
+    // sector angles in clockwise order:
+    // Brown 90 -> Blue 30 -> Purple -30 -> Green -90 -> Red -150 -> RedBrown 150 -> back to Brown 90
+    // We'll map angle to the interval between two adjacent sector angles.
+    const order = ["BROWN","BLUE","PURPLE","GREEN","RED","REDBROWN"];
+    const ang = key => SECTORS.find(s=>s.key===key).angleDeg;
+
+    // normalize angle to [-180,180], but handle wrap between 150 and 90 (through 180/-180)
+    // We'll pick arc by checking which two consecutive angles bound the point along clockwise direction.
+    // Convert to [0,360) for stable comparisons.
+    const to360 = d => (d<0 ? d+360 : d);
+    const A = to360(deg);
+
+    const pairs = [
+      ["BROWN","BLUE"],
+      ["BLUE","PURPLE"],
+      ["PURPLE","GREEN"],
+      ["GREEN","RED"],
+      ["RED","REDBROWN"],
+      ["REDBROWN","BROWN"],
+    ].map(([a,b])=>{
+      const a360 = to360(ang(a));
+      const b360 = to360(ang(b));
+      // clockwise from a to b (decreasing in your angles), but on 0..360 we can treat ranges with wrap.
+      // We'll compute shortest clockwise range from a to b by stepping through our fixed order.
+      return { a,b, a360, b360 };
+    });
+
+    // Build actual ranges by following the known order around the circle in 60° steps.
+    // The boundaries are midpoints between sector angles.
+    // Compute midpoints:
+    const mids = [];
+    for(let i=0;i<order.length;i++){
+      const k1 = order[i];
+      const k2 = order[(i+1)%order.length];
+      const d1 = to360(ang(k1));
+      const d2 = to360(ang(k2));
+      // midpoint along circular direction from d1 to d2 by the shorter path (they're 60° apart)
+      let m = (d1 + d2)/2;
+      // handle wrap around 360/0
+      if(Math.abs(d1-d2) > 180){
+        m = ( (d1 + d2 + 360) / 2 ) % 360;
+      }
+      mids.push({ between:[k1,k2], mid:m });
+    }
+
+    // Determine which sector wedge (between midpoints) contains A, then map to adjacent pair category.
+    // Wedge i is from mids[i-1] to mids[i] around the circle, containing sector order[i].
+    const midVals = mids.map(x=>x.mid);
+    // sort midpoints around circle
+    const sorted = [...midVals].sort((a,b)=>a-b);
+
+    // Find which interval contains A
+    let idx = sorted.findIndex((v,i)=>{
+      const next = sorted[(i+1)%sorted.length];
+      if(i === sorted.length-1){
+        return (A >= v) || (A < next);
+      }
+      return (A >= v && A < next);
+    });
+    if(idx < 0) idx = 0;
+
+    // Interval [sorted[idx], sorted[idx+1]) contains a sector; map it by nearest sector:
+    const nearest = SECTORS
+      .map(s=>({ s, d: Math.min(Math.abs(to360(s.angleDeg)-A), 360-Math.abs(to360(s.angleDeg)-A)) }))
+      .sort((p,q)=>p.d-q.d)[0].s;
+
+    // Arc category is between nearest and its next clockwise neighbor
+    const pos = order.indexOf(nearest.key);
+    const next = order[(pos+1)%order.length];
+    const a = nearest.key;
+    const b = next;
+    const arc = CATEGORY_ARCS.find(x=>x.a===a && x.b===b) || CATEGORY_ARCS.find(x=>x.a===b && x.b===a) || { label:"Unclassified", a, b };
+    return arc;
+  }
+
+  function computeScore(questions, answers){
+    // answers: { [qid]: { choiceKey, importanceKey } }
+    const breakdown = [];
+    const synergyNotes = [];
+
+    // First pass: raw contributions + build per-tag stance from non-neutral answers
+    let rawX = 0, rawY = 0;
+    let maxSum = 0;
+
+    const tagAgg = new Map(); // tag -> {sum, wsum}
+    const getQ = (qid)=> questions.find(q=>q.id===qid);
+
+    for(const q of questions){
+      const a = answers[q.id];
+      if(!a) continue;
+      const ansDef = getAnswerDef(a.choiceKey);
+      if(!ansDef) continue;
+
+      const impDef = getImportanceDef(a.importanceKey);
+      const weight = Number(q.weight ?? 1);
+      const w = weight * Number(impDef.mult ?? 1);
+
+      maxSum += Math.abs(w) * 1; // max abs answer is 1
+
+      const vec = sectorVec(q.direction);
+      const baseValue = Number(ansDef.value ?? 0);
+
+      const cx = vec.x * baseValue * w;
+      const cy = vec.y * baseValue * w;
+      rawX += cx;
+      rawY += cy;
+
+      // build tag stance only from non-neutral (value !=0) answers
+      if(Math.abs(baseValue) > 1e-9 && Array.isArray(q.tags)){
+        for(const t of q.tags){
+          if(!t) continue;
+          const key = String(t).toLowerCase().trim();
+          if(!key) continue;
+          const cur = tagAgg.get(key) || { sum:0, wsum:0 };
+          cur.sum += baseValue * w;
+          cur.wsum += Math.abs(w);
+          tagAgg.set(key, cur);
+        }
+      }
+
+      breakdown.push({
+        qid: q.id,
+        text: q.text,
+        direction: q.direction,
+        tags: Array.isArray(q.tags) ? q.tags : [],
+        weight,
+        importance: a.importanceKey,
+        choiceKey: a.choiceKey,
+        choiceLabel: ansDef.label,
+        baseValue,
+        inferredValue: 0,
+        w,
+        contribX: cx,
+        contribY: cy,
+        notes: []
+      });
+    }
+
+    // Second pass (Synergy): infer stance for Neutral/Ambivalent based on tag consistency
+    if(state.settings.synergy?.enabled){
+      for(const row of breakdown){
+        const q = getQ(row.qid);
+        const ansDef = getAnswerDef(row.choiceKey);
+        const special = ansDef?.special || null;
+        if(!(special === "neutral" || special === "ambivalent")) continue;
+        if(!q?.tags?.length) continue;
+
+        // compute average tag stance across the question's tags
+        let sum = 0, cnt = 0;
+        for(const t of q.tags){
+          const key = String(t).toLowerCase().trim();
+          const agg = tagAgg.get(key);
+          if(!agg || !agg.wsum) continue;
+          const v = agg.sum / agg.wsum;
+          sum += v; cnt++;
+        }
+        if(!cnt) continue;
+        const tagStance = sum / cnt;
+
+        if(Math.abs(tagStance) < Number(state.settings.synergy.threshold ?? 0.25)) continue;
+
+        const strength = (special === "neutral")
+          ? Number(state.settings.synergy.neutralStrength ?? 0.35)
+          : Number(state.settings.synergy.ambivalentStrength ?? 0.20);
+
+        const inferred = tagStance * strength; // small inferred nudge
+        const qVec = sectorVec(row.direction);
+        const dx = qVec.x * inferred * row.w;
+        const dy = qVec.y * inferred * row.w;
+
+        rawX += dx;
+        rawY += dy;
+
+        row.inferredValue = inferred;
+        row.contribX += dx;
+        row.contribY += dy;
+
+        const note = `Synergy: inferred ${inferred.toFixed(2)} from tag-consistency (avg tag stance ${tagStance.toFixed(2)}), because answer was ${ansDef.label}.`;
+        row.notes.push(note);
+        synergyNotes.push({ qid: row.qid, text: row.text, note });
+      }
+    }
+
+    // Normalize into [-1,1] range
+    if(maxSum < 1e-9) maxSum = 1;
+    let x = rawX / maxSum;
+    let y = rawY / maxSum;
+
+    // clamp to unit circle
+    const r = Math.hypot(x,y);
+    if(r > 1){
+      x /= r; y /= r;
+    }
+
+    const cls = classifyPoint(x,y);
+
+    return {
+      x, y,
+      r: Math.hypot(x,y),
+      classification: cls,
+      breakdown,
+      synergyNotes,
+      maxSum
+    };
+  }
+
+  // ---- Canvas drawing ----
+  function drawCompass(canvas, points){
+    // points: [{x,y,label,color}]
+    const ctx = canvas.getContext("2d");
+    const W = canvas.width, H = canvas.height;
+    ctx.clearRect(0,0,W,H);
+
+    const cx = W/2, cy = H/2;
+    const R = Math.min(W,H) * 0.42;
+
+    // background
+    ctx.fillStyle = "rgba(0,0,0,0)";
+    ctx.fillRect(0,0,W,H);
+
+    // hex vertices
+    const verts = SECTORS.map(s=>{
+      const a = rad(s.angleDeg);
+      return { x: cx + Math.cos(a)*R, y: cy - Math.sin(a)*R }; // invert y for canvas
+    });
+
+    // fill sectors (triangles)
+    for(let i=0;i<SECTORS.length;i++){
+      const s = SECTORS[i];
+      const v1 = verts[i];
+      const v2 = verts[(i+1)%SECTORS.length];
+      ctx.beginPath();
+      ctx.moveTo(cx,cy);
+      ctx.lineTo(v1.x,v1.y);
+      ctx.lineTo(v2.x,v2.y);
+      ctx.closePath();
+      ctx.fillStyle = hexToRgba(s.color, 0.22);
+      ctx.fill();
+      ctx.strokeStyle = "rgba(255,255,255,.08)";
+      ctx.stroke();
+    }
+
+    // grey center
+    ctx.beginPath();
+    ctx.arc(cx,cy, R*state.settings.centerRadius, 0, Math.PI*2);
+    ctx.fillStyle = hexToRgba(GREY.color, 0.28);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(255,255,255,.10)";
+    ctx.stroke();
+
+    // rings
+    for(const k of [0.25, 0.5, 0.75, 1.0]){
+      ctx.beginPath();
+      ctx.arc(cx,cy, R*k, 0, Math.PI*2);
+      ctx.strokeStyle = "rgba(255,255,255,.06)";
+      ctx.stroke();
+    }
+
+    // labels
+    ctx.font = "12px system-ui";
+    ctx.fillStyle = "rgba(233,238,252,.8)";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    for(let i=0;i<SECTORS.length;i++){
+      const s = SECTORS[i];
+      const a = rad(s.angleDeg);
+      const lx = cx + Math.cos(a)*(R*1.08);
+      const ly = cy - Math.sin(a)*(R*1.08);
+      ctx.fillText(s.name, lx, ly);
+    }
+    ctx.fillStyle = "rgba(233,238,252,.7)";
+    ctx.fillText("Grey", cx, cy);
+
+    // plot points
+    for(const p of points || []){
+      const px = cx + p.x * R;
+      const py = cy - p.y * R;
+      ctx.beginPath();
+      ctx.arc(px,py, 6, 0, Math.PI*2);
+      ctx.fillStyle = p.color || "rgba(124,156,255,.95)";
+      ctx.fill();
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = "rgba(0,0,0,.55)";
+      ctx.stroke();
+
+      if(p.label){
+        ctx.font = "12px system-ui";
+        ctx.fillStyle = "rgba(233,238,252,.9)";
+        ctx.textAlign = "left";
+        ctx.fillText(p.label, px + 10, py - 10);
+      }
+    }
+  }
+
+  function hexToRgba(hex, a){
+    // accepts CSS named colors too; try parse #rrggbb
+    const h = (hex||"").trim();
+    if(h.startsWith("#") && (h.length===7)){
+      const r = parseInt(h.slice(1,3),16);
+      const g = parseInt(h.slice(3,5),16);
+      const b = parseInt(h.slice(5,7),16);
+      return `rgba(${r},${g},${b},${a})`;
+    }
+    // fallback: just use it with global alpha-ish
+    return `rgba(255,255,255,${a})`;
+  }
+
+  // ---- Pages ----
+  function renderHome(){
+    const u = state.user;
+    $app.innerHTML = `
+      <div class="grid cols2">
+        <div class="card">
+          <h2>What this is</h2>
+          <div class="smallnote">
+            A 6-direction coordinate compass (Brown → Blue → Purple → Green → Red → Red-Brown, clockwise) with a grey liminal center.
+            Your position is computed as a weighted vector sum of your answers.
+            <div class="spacer"></div>
+            <span class="badge primary">Composite/Mixed</span> means you’re between adjacent regions (your “arc category”).
+            <span class="badge warn">Radicalism</span> is how far you are from the center (authority axis is intentionally *implicit* by distance).
+          </div>
+          <div class="hr"></div>
+          <div class="row">
+            <a class="btn primary" href="#/quiz">Take the test</a>
+            <a class="btn" href="#/ledger">Result ledger</a>
+            <a class="btn" href="#/suggest">Suggest questions</a>
+          </div>
+          <div class="spacer"></div>
+          <div class="smallnote muted">
+            Practical note: because this is a static GitHub Pages site, security depends on Firestore Security Rules (not “hiding” code).
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>Compass Preview</h2>
+          <div class="canvasWrap">
+            <canvas id="c_preview" width="520" height="520"></canvas>
+          </div>
+          <div class="spacer"></div>
+          <div class="smallnote muted">
+            Tip: Share a result via a public “share link”, then compare multiple attempts (yours or friends’) on one compass.
+          </div>
+        </div>
+      </div>
+    `;
+
+    const c = document.getElementById("c_preview");
+    drawCompass(c, [
+      { x:0.00, y:0.00, label:"Center", color:"rgba(107,114,128,.95)" },
+      { x:0.62, y:0.18, label:"Example", color:"rgba(124,156,255,.95)" },
+    ]);
+  }
+
+  function renderQuiz(){
+    if(!state.user){
+      $app.innerHTML = `
+        <div class="card">
+          <h2>Sign in required</h2>
+          <div class="smallnote muted">To save attempts, keep a ledger, and vote on suggestions, you must sign in.</div>
+          <div class="spacer"></div>
+          <button class="btn good" type="button" id="goLogin">Sign in</button>
+        </div>
+      `;
+      document.getElementById("goLogin").onclick = ()=> navTo("#/login");
+      return;
+    }
+
+    const qs = state.questions;
+    if(!qs.length){
+      $app.innerHTML = `
+        <div class="card">
+          <h2>No questions yet</h2>
+          <div class="smallnote muted">An admin must add questions first (Admin → Questions). Or suggest questions in “Suggest Questions”.</div>
+        </div>
+      `;
+      return;
+    }
+
+    // local working answers (not saved until submit)
+    const key = "hpc_draft_answers_v1";
+    const saved = safeJsonParse(localStorage.getItem(key)) || {};
+    const answers = saved;
+
+    const answerOptions = state.settings.answerScale;
+    const impOptions = state.settings.importanceScale;
+
+    $app.innerHTML = `
+      <div class="grid cols2">
+        <div class="card">
+          <h2>Test</h2>
+          <div class="smallnote muted">Answer every question (Neutral / Ambivalent / N/A allowed). Set importance per question. Then submit to compute + store attempt.</div>
+          <div class="hr"></div>
+
+          <div class="row">
+            <button id="saveDraft" class="btn small" type="button">Save draft</button>
+            <button id="clearDraft" class="btn small danger" type="button">Clear draft</button>
+          </div>
+
+          <div class="spacer"></div>
+          <div id="qList" class="list"></div>
+
+          <div class="hr"></div>
+          <div class="row">
+            <button id="submitAttempt" class="btn good" type="button">Submit attempt</button>
+          </div>
+          <div class="spacer"></div>
+          <div class="smallnote muted">
+            Transparency: your ledger stores every question, your answer, your importance weight, and each coordinate contribution.
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>Live preview</h2>
+          <div class="canvasWrap">
+            <canvas id="c_live" width="520" height="520"></canvas>
+          </div>
+          <div class="spacer"></div>
+          <div class="kpi">
+            <div class="box">
+              <div class="t">Current X</div>
+              <div class="v mono" id="kpi_x">0.00</div>
+            </div>
+            <div class="box">
+              <div class="t">Current Y</div>
+              <div class="v mono" id="kpi_y">0.00</div>
+            </div>
+            <div class="box">
+              <div class="t">Radicalism (distance)</div>
+              <div class="v mono" id="kpi_r">0.00</div>
+            </div>
+            <div class="box">
+              <div class="t">Label</div>
+              <div class="v" id="kpi_label">—</div>
+            </div>
+          </div>
+
+          <div class="hr"></div>
+          <div class="smallnote muted">
+            “Synergy” will only apply on submit: it nudges Neutral/Ambivalent answers based on your tag-consistent non-neutral answers.
+          </div>
+        </div>
+      </div>
+    `;
+
+    const $qList = document.getElementById("qList");
+    const c = document.getElementById("c_live");
+
+    function renderQuestions(){
+      $qList.innerHTML = qs.map((q, idx)=>{
+        const a = answers[q.id] || { choiceKey:"N", importanceKey:3 };
+        const tags = Array.isArray(q.tags) && q.tags.length ? q.tags : [];
+        const sector = SECTORS.find(s=>s.key===q.direction);
+        return `
+          <div class="item">
+            <div class="top">
+              <div style="flex:1">
+                <p class="title"><span class="badge primary">Q${idx+1}</span> ${htmlEscape(q.text)}</p>
+                <div class="meta">
+                  <span class="badge">Dir: <b style="color:${sector?.color || 'inherit'}">${htmlEscape(q.direction)}</b></span>
+                  <span class="badge">Weight: <span class="mono">${Number(q.weight ?? 1).toFixed(2)}</span></span>
+                  ${tags.length ? `<div class="chips" style="margin-top:6px">${tags.map(t=>`<span class="chip">#${htmlEscape(t)}</span>`).join("")}</div>` : ``}
+                </div>
+              </div>
+            </div>
+
+            <div class="spacer"></div>
+            <div class="split">
+              <div>
+                <label>Answer</label>
+                <select data-qid="${q.id}" data-field="choiceKey">
+                  ${answerOptions.map(opt=>`
+                    <option value="${opt.key}" ${opt.key===a.choiceKey ? "selected":""}>
+                      ${htmlEscape(opt.label)}
+                    </option>
+                  `).join("")}
+                </select>
+              </div>
+              <div>
+                <label>Importance</label>
+                <select data-qid="${q.id}" data-field="importanceKey">
+                  ${impOptions.map(opt=>`
+                    <option value="${opt.key}" ${Number(opt.key)===Number(a.importanceKey) ? "selected":""}>
+                      ${htmlEscape(opt.label)} (×${Number(opt.mult).toFixed(2)})
+                    </option>
+                  `).join("")}
+                </select>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join("");
+
+      $qList.querySelectorAll("select").forEach(sel=>{
+        sel.addEventListener("change", ()=>{
+          const qid = sel.getAttribute("data-qid");
+          const field = sel.getAttribute("data-field");
+          answers[qid] = answers[qid] || { choiceKey:"N", importanceKey:3 };
+          answers[qid][field] = (field === "importanceKey") ? Number(sel.value) : sel.value;
+          // live preview uses NO synergy (only direct answers)
+          const preview = computeScore(qs, answers);
+          updateLive(preview);
+          localStorage.setItem(key, JSON.stringify(answers));
+        });
+      });
+    }
+
+    function updateLive(res){
+      document.getElementById("kpi_x").textContent = res.x.toFixed(3);
+      document.getElementById("kpi_y").textContent = res.y.toFixed(3);
+      document.getElementById("kpi_r").textContent = res.r.toFixed(3);
+      document.getElementById("kpi_label").textContent = res.classification.label;
+      drawCompass(c, [
+        { x: res.x, y: res.y, label:"You", color:"rgba(124,156,255,.95)" }
+      ]);
+    }
+
+    document.getElementById("saveDraft").onclick = ()=>{
+      localStorage.setItem(key, JSON.stringify(answers));
+      toast("Draft saved locally.");
+    };
+
+    document.getElementById("clearDraft").onclick = ()=>{
+      localStorage.removeItem(key);
+      for(const k of Object.keys(answers)) delete answers[k];
+      renderQuestions();
+      updateLive(computeScore(qs, answers));
+      toast("Draft cleared.");
+    };
+
+    document.getElementById("submitAttempt").onclick = async ()=>{
+      // require at least something answered (draft can be empty)
+      if(Object.keys(answers).length === 0){
+        toast("Answer at least one question.");
+        return;
+      }
+
+      const res = computeScore(qs, answers);
+
+      try{
+        const attemptDoc = {
+          uid: state.user.uid,
+          createdAt: serverTimestamp(),
+          public: false,
+          answers,
+          computed: {
+            x: res.x, y: res.y, r: res.r,
+            sectorKey: res.classification.sectorKey,
+            sectorName: res.classification.sectorName,
+            category: res.classification.category,
+            label: res.classification.label,
+            radicalism: res.classification.radicalism,
+            maxSum: res.maxSum,
+            synergyNotes: res.synergyNotes,
+            breakdown: res.breakdown,
+            settingsSnapshot: state.settings, // so historical attempts remain explainable even if admin changes scales later
+          }
+        };
+        const ref = await addDoc(collection(db, "attempts"), attemptDoc);
+        localStorage.removeItem(key);
+        state.lastAttempt = ref.id;
+        toast("Attempt saved.");
+        navTo(`#/attempt/${ref.id}`);
+      }catch(e){
+        toast("Failed to save attempt: " + (e?.message || e));
+      }
+    };
+
+    renderQuestions();
+    updateLive(computeScore(qs, answers));
+  }
+
+  function safeJsonParse(s){
+    try{ return JSON.parse(s); }catch{ return null; }
+  }
+
+  async function fetchMyAttempts(){
+    if(!state.user) return [];
+    const out = [];
+    const qref = query(
+      collection(db, "attempts"),
+      where("uid","==", state.user.uid),
+      orderBy("createdAt","desc"),
+      limit(50)
+    );
+    const snap = await getDocs(qref);
+    snap.forEach(d=> out.push({ id:d.id, ...d.data() }));
+    return out;
+  }
+
+  async function fetchAttemptById(id){
+    const snap = await getDoc(doc(db, "attempts", id));
+    if(!snap.exists()) return null;
+    return { id:snap.id, ...snap.data() };
+  }
+
+  function attemptCanView(attempt){
+    if(!attempt) return false;
+    if(attempt.public === true) return true;
+    if(state.user && attempt.uid === state.user.uid) return true;
+    return false;
+  }
+
+  function renderAttemptCard(attempt, opts={}){
+    const c = attempt?.computed;
+    const isMine = state.user && attempt.uid === state.user.uid;
+    const canShare = isMine;
+    const pts = [{ x:c.x, y:c.y, label: opts.label || "You", color: opts.color || "rgba(124,156,255,.95)" }];
+
+    const sector = SECTORS.find(s=>s.key===c.sectorKey);
+    const sectorColor = sector?.color || getCSS("--grey");
+
+    return `
+      <div class="card">
+        <h2>Result</h2>
+        <div class="row">
+          <span class="badge primary">X: <span class="mono">${c.x.toFixed(3)}</span></span>
+          <span class="badge primary">Y: <span class="mono">${c.y.toFixed(3)}</span></span>
+          <span class="badge warn">Radicalism: <span class="mono">${c.r.toFixed(3)}</span></span>
+        </div>
+        <div class="spacer"></div>
+        <div class="row">
+          <span class="badge" style="border-color:${hexToRgba(sectorColor, .4)}; background:${hexToRgba(sectorColor,.12)}; color:#e9eefc">
+            Nearest sector: <b style="color:${sectorColor}">${htmlEscape(c.sectorName || c.sectorKey)}</b>
+          </span>
+          <span class="badge">${htmlEscape(c.category || "—")}</span>
+        </div>
+        <div class="spacer"></div>
+        <div class="item">
+          <div class="title">${htmlEscape(c.label || "—")}</div>
+          <div class="meta">Attempt: ${htmlEscape(attempt.id)} · ${htmlEscape(fmtTime(attempt.createdAt))}</div>
+        </div>
+        <div class="spacer"></div>
+        <div class="canvasWrap">
+          <canvas id="${opts.canvasId}" width="520" height="520"></canvas>
+        </div>
+        <div class="spacer"></div>
+
+        ${canShare ? `
+          <div class="row">
+            <button class="btn small ${attempt.public ? 'warn' : ''}" type="button" data-action="togglePublic">
+              ${attempt.public ? 'Make private' : 'Make public (shareable)'}
+            </button>
+            <button class="btn small" type="button" data-action="copyLink" ${attempt.public ? "" : "disabled"}>
+              Copy share link
+            </button>
+            <a class="btn small" href="#/compare?ids=${encodeURIComponent(attempt.id)}">Compare</a>
+          </div>
+          <div class="spacer"></div>
+          <div class="smallnote muted">
+            Public share links are readable by anyone who has the link (per Firestore rules). Private attempts remain visible only to you.
+          </div>
+        ` : `
+          <div class="smallnote muted">This is a read-only view. Sharing controls require ownership.</div>
+        `}
+
+        <div class="hr"></div>
+        <div class="row">
+          <a class="btn" href="#/ledger">Open ledger</a>
+          <a class="btn primary" href="#/quiz">Retake test</a>
+        </div>
+      </div>
+    `;
+  }
+
+  async function renderAttemptPage(id, isShare=false){
+    const attempt = await fetchAttemptById(id);
+    if(!attempt){
+      $app.innerHTML = `<div class="card"><h2>Not found</h2><div class="smallnote muted">No attempt with that ID.</div></div>`;
+      return;
+    }
+    if(!attemptCanView(attempt)){
+      $app.innerHTML = `
+        <div class="card">
+          <h2>Access denied</h2>
+          <div class="smallnote muted">This attempt is private. Ask the owner to make it public and share the link.</div>
+        </div>
+      `;
+      return;
+    }
+
+    const canvasId = "c_attempt";
+    $app.innerHTML = `
+      <div class="grid cols2">
+        ${renderAttemptCard(attempt, { canvasId, label: isShare ? "Shared" : "You" })}
+        <div class="card">
+          <h2>Transparency Ledger</h2>
+          <div class="smallnote muted">
+            This shows exactly how your coordinate was computed: per-question weight, importance multiplier, answer value, and final contribution.
+          </div>
+          <div class="hr"></div>
+          ${renderLedgerTables(attempt)}
+        </div>
+      </div>
+    `;
+
+    // draw
+    const canvas = document.getElementById(canvasId);
+    drawCompass(canvas, [
+      { x: attempt.computed.x, y: attempt.computed.y, label: isShare ? "Shared" : "You", color:"rgba(124,156,255,.95)" }
+    ]);
+
+    // wire share controls (owner only)
+    const btnToggle = $app.querySelector('[data-action="togglePublic"]');
+    const btnCopy = $app.querySelector('[data-action="copyLink"]');
+
+    if(btnToggle){
+      btnToggle.onclick = async ()=>{
+        try{
+          const newVal = !(attempt.public === true);
+          await updateDoc(doc(db,"attempts", attempt.id), { public: newVal });
+          attempt.public = newVal;
+          toast(newVal ? "Now public (shareable)." : "Now private.");
+          render(); // rerender to refresh buttons
+        }catch(e){
+          toast("Failed: " + (e?.message || e));
+        }
+      };
+    }
+
+    if(btnCopy){
+      btnCopy.onclick = async ()=>{
+        try{
+          const link = `${location.origin}${location.pathname}#/share/${attempt.id}`;
+          await navigator.clipboard.writeText(link);
+          toast("Share link copied.");
+        }catch{
+          toast("Copy failed. Manually copy from address bar.");
+        }
+      };
+    }
+  }
+
+  function renderLedgerTables(attempt){
+    const c = attempt.computed;
+    const breakdown = Array.isArray(c.breakdown) ? c.breakdown : [];
+    const synergy = Array.isArray(c.synergyNotes) ? c.synergyNotes : [];
+
+    const rows = breakdown.map((r, i)=>{
+      const dir = SECTORS.find(s=>s.key===r.direction);
+      const color = dir?.color || "#bbb";
+      const note = (r.notes && r.notes.length) ? `<div class="smallnote warnText" style="margin-top:6px">${htmlEscape(r.notes.join(" "))}</div>` : "";
+      return `
+        <tr>
+          <td class="mono">${i+1}</td>
+          <td>${htmlEscape(r.text)}</td>
+          <td><span class="badge" style="border-color:${hexToRgba(color,.45)}; background:${hexToRgba(color,.12)}; color:#e9eefc">${htmlEscape(r.direction)}</span></td>
+          <td>${htmlEscape(r.choiceLabel)} <div class="meta mono">${Number(r.baseValue).toFixed(2)}${r.inferredValue ? ` + ${Number(r.inferredValue).toFixed(2)}(sy)` : ``}</div></td>
+          <td class="mono">${Number(r.weight).toFixed(2)} × ${Number(r.w/Number(r.weight||1)).toFixed(2)} (imp)</td>
+          <td class="mono">${Number(r.contribX).toFixed(4)}</td>
+          <td class="mono">${Number(r.contribY).toFixed(4)}${note}</td>
+        </tr>
+      `;
+    }).join("");
+
+    const sy = synergy.length ? `
+      <div class="item">
+        <div class="top">
+          <div>
+            <div class="title">Synergy notes (${synergy.length})</div>
+            <div class="meta">Only applied when your answer was Neutral/Ambivalent/N/A and your tag stance was consistent enough.</div>
+          </div>
+        </div>
+        <div class="spacer"></div>
+        <div class="list">
+          ${synergy.slice(0,50).map(s=>`
+            <div class="item">
+              <div class="title">${htmlEscape(s.text)}</div>
+              <div class="smallnote warnText">${htmlEscape(s.note)}</div>
+            </div>
+          `).join("")}
+        </div>
+      </div>
+    ` : `<div class="smallnote muted">No synergy adjustments applied.</div>`;
+
+    return `
+      <div class="row">
+        <span class="badge primary">Final X: <span class="mono">${c.x.toFixed(4)}</span></span>
+        <span class="badge primary">Final Y: <span class="mono">${c.y.toFixed(4)}</span></span>
+        <span class="badge warn">Distance: <span class="mono">${c.r.toFixed(4)}</span></span>
+      </div>
+      <div class="spacer"></div>
+
+      <table class="table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Question</th>
+            <th>Dir</th>
+            <th>Answer</th>
+            <th>Weight × Importance</th>
+            <th>ΔX</th>
+            <th>ΔY</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows || `<tr><td colspan="7" class="muted">No breakdown stored.</td></tr>`}
+        </tbody>
+      </table>
+
+      <div class="spacer"></div>
+      ${sy}
+    `;
+  }
+
+  async function renderLedger(){
+    if(!state.user){
+      $app.innerHTML = `
+        <div class="card">
+          <h2>Result ledger</h2>
+          <div class="smallnote muted">Sign in to see your saved attempts.</div>
+          <div class="spacer"></div>
+          <button class="btn good" type="button" id="goLogin">Sign in</button>
+        </div>
+      `;
+      document.getElementById("goLogin").onclick = ()=> navTo("#/login");
+      return;
+    }
+
+    let attempts = [];
+    try{
+      attempts = await fetchMyAttempts();
+    }catch(e){
+      $app.innerHTML = `<div class="card"><h2>Error</h2><div class="smallnote muted">${htmlEscape(e?.message || e)}</div></div>`;
+      return;
+    }
+
+    const items = attempts.map(a=>{
+      const c = a.computed;
+      const badge = a.public ? `<span class="badge good">Public</span>` : `<span class="badge">Private</span>`;
+      const sec = SECTORS.find(s=>s.key===c?.sectorKey);
+      const col = sec?.color || getCSS("--grey");
+      return `
+        <div class="item">
+          <div class="top">
+            <div>
+              <div class="title">
+                <a href="#/attempt/${a.id}">${htmlEscape(c?.label || "Attempt")}</a>
+              </div>
+              <div class="meta">
+                ${badge}
+                <span class="badge">Time: ${htmlEscape(fmtTime(a.createdAt))}</span>
+                <span class="badge" style="border-color:${hexToRgba(col,.4)}; background:${hexToRgba(col,.12)}; color:#e9eefc">
+                  Sector: <b style="color:${col}">${htmlEscape(c?.sectorName || c?.sectorKey || "—")}</b>
+                </span>
+                <span class="badge primary">X <span class="mono">${Number(c?.x ?? 0).toFixed(3)}</span></span>
+                <span class="badge primary">Y <span class="mono">${Number(c?.y ?? 0).toFixed(3)}</span></span>
+                <span class="badge warn">R <span class="mono">${Number(c?.r ?? 0).toFixed(3)}</span></span>
+              </div>
+            </div>
+            <div class="row">
+              ${a.public ? `<a class="btn small" href="#/share/${a.id}">Open share view</a>` : ``}
+              <a class="btn small" href="#/compare?ids=${encodeURIComponent(a.id)}">Compare</a>
+            </div>
+          </div>
+        </div>
+      `;
+    }).join("");
+
+    $app.innerHTML = `
+      <div class="grid cols2">
+        <div class="card">
+          <h2>Your attempts</h2>
+          <div class="smallnote muted">Saved attempts are immutable records with the full scoring breakdown.</div>
+          <div class="hr"></div>
+          <div class="list">
+            ${items || `<div class="smallnote muted">No attempts yet. Take the test.</div>`}
+          </div>
+          <div class="hr"></div>
+          <a class="btn primary" href="#/quiz">Take / retake test</a>
+        </div>
+
+        <div class="card">
+          <h2>Quick compare</h2>
+          <div class="smallnote muted">Enter one or more attempt IDs (comma-separated) to plot on the same compass.</div>
+          <div class="spacer"></div>
+          <input id="cmp_ids" placeholder="e.g. AbC123..., DeF456..., ..." />
+          <div class="spacer"></div>
+          <button class="btn good" id="cmp_go" type="button">Compare</button>
+          <div class="hr"></div>
+          <div class="smallnote muted">
+            If an ID belongs to someone else, it must be public to load.
+          </div>
+        </div>
+      </div>
+    `;
+
+    document.getElementById("cmp_go").onclick = ()=>{
+      const val = document.getElementById("cmp_ids").value.trim();
+      if(!val) return toast("Enter at least one attempt ID.");
+      navTo(`#/compare?ids=${encodeURIComponent(val)}`);
+    };
+  }
+
+  async function renderCompare(){
+    const { q } = route();
+    const idsParam = (q.get("ids") || "").trim();
+    const ids = idsParam ? idsParam.split(",").map(s=>s.trim()).filter(Boolean) : [];
+
+    $app.innerHTML = `
+      <div class="grid cols2">
+        <div class="card">
+          <h2>Compare attempts</h2>
+          <div class="smallnote muted">Plot multiple attempts (yours and/or public shared attempts) on one compass.</div>
+          <div class="spacer"></div>
+          <label>Attempt IDs (comma-separated)</label>
+          <input id="cmp_in" value="${htmlEscape(idsParam)}" placeholder="id1, id2, id3" />
+          <div class="spacer"></div>
+          <button class="btn good" id="cmp_btn" type="button">Load</button>
+          <div class="hr"></div>
+          <div id="cmp_list" class="list"></div>
+        </div>
+
+        <div class="card">
+          <h2>Compass</h2>
+          <div class="canvasWrap">
+            <canvas id="c_cmp" width="520" height="520"></canvas>
+          </div>
+          <div class="spacer"></div>
+          <div class="smallnote muted">
+            Each dot is one attempt. Use the ledger per attempt for full transparency.
+          </div>
+        </div>
+      </div>
+    `;
+
+    document.getElementById("cmp_btn").onclick = ()=>{
+      const val = document.getElementById("cmp_in").value.trim();
+      navTo(`#/compare?ids=${encodeURIComponent(val)}`);
+    };
+
+    if(!ids.length){
+      document.getElementById("cmp_list").innerHTML = `<div class="smallnote muted">Enter attempt IDs above.</div>`;
+      drawCompass(document.getElementById("c_cmp"), []);
+      return;
+    }
+
+    const attempts = [];
+    const errors = [];
+    for(const id of ids.slice(0,10)){
+      try{
+        const a = await fetchAttemptById(id);
+        if(!a) { errors.push(`${id}: not found`); continue; }
+        if(!attemptCanView(a)) { errors.push(`${id}: private`); continue; }
+        attempts.push(a);
+      }catch(e){
+        errors.push(`${id}: ${e?.message || e}`);
+      }
+    }
+
+    const colors = [
+      "rgba(124,156,255,.95)",
+      "rgba(68,239,154,.95)",
+      "rgba(255,193,77,.95)",
+      "rgba(255,90,115,.95)",
+      "rgba(180,83,9,.95)",
+      "rgba(59,130,246,.95)",
+      "rgba(139,92,246,.95)",
+    ];
+
+    const points = attempts.map((a,i)=>({
+      x:a.computed.x, y:a.computed.y,
+      label: (i+1).toString(),
+      color: colors[i % colors.length]
+    }));
+
+    drawCompass(document.getElementById("c_cmp"), points);
+
+    const list = attempts.map((a,i)=>{
+      const c = a.computed;
+      const badge = a.public ? `<span class="badge good">Public</span>` : `<span class="badge">Private (yours)</span>`;
+      return `
+        <div class="item">
+          <div class="top">
+            <div>
+              <div class="title">
+                <span class="badge primary">#${i+1}</span>
+                <a href="#/${a.public ? "share" : "attempt"}/${a.id}">${htmlEscape(c.label || "Attempt")}</a>
+              </div>
+              <div class="meta">
+                ${badge}
+                <span class="badge">Time: ${htmlEscape(fmtTime(a.createdAt))}</span>
+                <span class="badge primary">X <span class="mono">${c.x.toFixed(3)}</span></span>
+                <span class="badge primary">Y <span class="mono">${c.y.toFixed(3)}</span></span>
+                <span class="badge warn">R <span class="mono">${c.r.toFixed(3)}</span></span>
+                <span class="badge">${htmlEscape(c.category || "—")}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+    }).join("");
+
+    const errHtml = errors.length ? `
+      <div class="item">
+        <div class="title dangerText">Some IDs could not be loaded</div>
+        <div class="smallnote muted">${errors.map(e=>`• ${htmlEscape(e)}`).join("<br/>")}</div>
+      </div>
+    ` : "";
+
+    document.getElementById("cmp_list").innerHTML = errHtml + (list || `<div class="smallnote muted">Nothing to show.</div>`);
+  }
+
+  async function renderSuggest(){
+    if(!state.user){
+      $app.innerHTML = `
+        <div class="card">
+          <h2>Suggest questions</h2>
+          <div class="smallnote muted">Sign in to submit and vote.</div>
+          <div class="spacer"></div>
+          <button class="btn good" type="button" id="goLogin">Sign in</button>
+        </div>
+      `;
+      document.getElementById("goLogin").onclick = ()=> navTo("#/login");
+      return;
+    }
+
+    const sectorOpts = SECTORS.map(s=>`<option value="${s.key}">${htmlEscape(s.name)} (${s.key})</option>`).join("");
+
+    $app.innerHTML = `
+      <div class="grid cols2">
+        <div class="card">
+          <h2>Submit a suggestion</h2>
+          <div class="smallnote muted">
+            Suggestions can be upvoted/downvoted. Admin can accept/reject, and accepted suggestions can be promoted into real questions.
+          </div>
+          <div class="hr"></div>
+
+          <label>Question text</label>
+          <textarea id="s_text" placeholder="Write a statement/question..."></textarea>
+          <div class="spacer"></div>
+
+          <div class="split">
+            <div>
+              <label>Direction</label>
+              <select id="s_dir">${sectorOpts}</select>
+            </div>
+            <div>
+              <label>Weight</label>
+              <input id="s_weight" type="number" step="0.05" value="1.00" />
+            </div>
+          </div>
+
+          <div class="spacer"></div>
+          <label>Tags (comma-separated)</label>
+          <input id="s_tags" placeholder="e.g. nationalism, economy, religion, lgbtq, authority" />
+          <div class="spacer"></div>
+
+          <button id="s_submit" class="btn good" type="button">Submit suggestion</button>
+          <div class="spacer"></div>
+          <div class="smallnote muted">Keep it clean and testable: one claim per question, not a paragraph.</div>
+        </div>
+
+        <div class="card">
+          <h2>Suggestions (top)</h2>
+          <div class="row">
+            <button class="btn small" id="filterAll" type="button">All</button>
+            <button class="btn small" id="filterPending" type="button">Pending</button>
+            <button class="btn small" id="filterAccepted" type="button">Accepted</button>
+            <button class="btn small" id="filterRejected" type="button">Rejected</button>
+          </div>
+          <div class="spacer"></div>
+          <div id="s_list" class="list"></div>
+        </div>
+      </div>
+    `;
+
+    document.getElementById("s_submit").onclick = async ()=>{
+      const text = document.getElementById("s_text").value.trim();
+      const direction = document.getElementById("s_dir").value;
+      const weight = Number(document.getElementById("s_weight").value || 1);
+      const tagsRaw = document.getElementById("s_tags").value.trim();
+      const tags = tagsRaw ? tagsRaw.split(",").map(t=>t.trim()).filter(Boolean) : [];
+
+      if(text.length < 8) return toast("Write a longer question.");
+      if(!SECTORS.some(s=>s.key===direction)) return toast("Pick a valid direction.");
+
+      try{
+        await addDoc(collection(db,"suggestions"), {
+          text,
+          direction,
+          weight: clamp(weight, 0.05, 5),
+          tags,
+          status: "pending",
+          score: 0,
+          createdBy: state.user.uid,
+          createdAt: serverTimestamp()
+        });
+        toast("Suggestion submitted.");
+        document.getElementById("s_text").value = "";
+        document.getElementById("s_tags").value = "";
+        await loadSuggestions("pending");
+      }catch(e){
+        toast("Failed: " + (e?.message || e));
+      }
+    };
+
+    async function vote(sid, dir){ // dir = +1 / -1
+      try{
+        const sugRef = doc(db, "suggestions", sid);
+        const voteRef = doc(db, "suggestions", sid, "votes", state.user.uid);
+
+        await runTransaction(db, async (tx)=>{
+          const vSnap = await tx.get(voteRef);
+          const cur = vSnap.exists() ? Number(vSnap.data().v || 0) : 0;
+          let next = dir;
+          if(cur === dir) next = 0; // toggle off
+
+          const delta = next - cur;
+          if(delta !== 0){
+            tx.update(sugRef, { score: increment(delta) });
+          }
+          if(next === 0){
+            if(vSnap.exists()) tx.delete(voteRef);
+          }else{
+            tx.set(voteRef, { v: next, updatedAt: serverTimestamp() });
+          }
+        });
+
+        toast("Vote recorded.");
+        await loadSuggestions(activeFilter);
+      }catch(e){
+        toast("Vote failed: " + (e?.message || e));
+      }
+    }
+
+    async function adminSetStatus(sid, status){
+      try{
+        await updateDoc(doc(db,"suggestions", sid), { status });
+        toast("Status updated.");
+        await loadSuggestions(activeFilter);
+      }catch(e){
+        toast("Failed: " + (e?.message || e));
+      }
+    }
+
+    async function adminPromoteToQuestion(sug){
+      try{
+        await addDoc(collection(db,"questions"), {
+          text: sug.text,
+          direction: sug.direction,
+          weight: Number(sug.weight ?? 1),
+          tags: Array.isArray(sug.tags) ? sug.tags : [],
+          enabled: true,
+          createdBy: state.user.uid,
+          createdAt: serverTimestamp()
+        });
+        await updateDoc(doc(db,"suggestions", sug.id), { status:"accepted" });
+        toast("Promoted into real question.");
+        await loadQuestions();
+        await loadSuggestions(activeFilter);
+      }catch(e){
+        toast("Promote failed: " + (e?.message || e));
+      }
+    }
+
+    let activeFilter = "pending";
+
+    document.getElementById("filterAll").onclick = ()=> loadSuggestions("all");
+    document.getElementById("filterPending").onclick = ()=> loadSuggestions("pending");
+    document.getElementById("filterAccepted").onclick = ()=> loadSuggestions("accepted");
+    document.getElementById("filterRejected").onclick = ()=> loadSuggestions("rejected");
+
+    async function loadSuggestions(filter){
+      activeFilter = filter;
+      const out = [];
+      try{
+        let qref;
+        if(filter === "all"){
+          qref = query(collection(db,"suggestions"), orderBy("score","desc"), orderBy("createdAt","desc"), limit(60));
+        }else{
+          qref = query(collection(db,"suggestions"), where("status","==", filter), orderBy("score","desc"), orderBy("createdAt","desc"), limit(60));
+        }
+        const snap = await getDocs(qref);
+        snap.forEach(d=> out.push({ id:d.id, ...d.data() }));
+      }catch(e){
+        // fallback without composite ordering if index missing
+        try{
+          const snap = await getDocs(collection(db,"suggestions"));
+          snap.forEach(d=>{
+            const data = d.data();
+            if(filter==="all" || data.status===filter) out.push({ id:d.id, ...data });
+          });
+          out.sort((a,b)=> (b.score||0)-(a.score||0));
+        }catch(_){}
+      }
+
+      const $list = document.getElementById("s_list");
+      if(!out.length){
+        $list.innerHTML = `<div class="smallnote muted">No suggestions found.</div>`;
+        return;
+      }
+
+      // get my votes for displayed suggestions
+      const myVotes = new Map();
+      for(const s of out){
+        try{
+          const vSnap = await getDoc(doc(db, "suggestions", s.id, "votes", state.user.uid));
+          if(vSnap.exists()) myVotes.set(s.id, Number(vSnap.data().v||0));
+        }catch(_){}
+      }
+
+      $list.innerHTML = out.map(s=>{
+        const sec = SECTORS.find(x=>x.key===s.direction);
+        const col = sec?.color || "#aaa";
+        const tags = Array.isArray(s.tags) ? s.tags : [];
+        const mv = myVotes.get(s.id) || 0;
+
+        const statusBadge =
+          s.status==="accepted" ? `<span class="badge good">Accepted</span>` :
+          s.status==="rejected" ? `<span class="badge bad">Rejected</span>` :
+          `<span class="badge warn">Pending</span>`;
+
+        return `
+          <div class="item">
+            <div class="top">
+              <div style="flex:1">
+                <div class="title">${htmlEscape(s.text)}</div>
+                <div class="meta">
+                  ${statusBadge}
+                  <span class="badge" style="border-color:${hexToRgba(col,.4)}; background:${hexToRgba(col,.12)}; color:#e9eefc">
+                    Dir: <b style="color:${col}">${htmlEscape(s.direction)}</b>
+                  </span>
+                  <span class="badge">Weight: <span class="mono">${Number(s.weight ?? 1).toFixed(2)}</span></span>
+                  <span class="badge primary">Score: <span class="mono">${Number(s.score ?? 0)}</span></span>
+                  <span class="badge">Time: ${htmlEscape(fmtTime(s.createdAt))}</span>
+                </div>
+                ${tags.length ? `<div class="chips" style="margin-top:6px">${tags.map(t=>`<span class="chip">#${htmlEscape(t)}</span>`).join("")}</div>` : ``}
+              </div>
+              <div class="row">
+                <button class="btn small ${mv===1?'good':''}" data-vote="up" data-id="${s.id}" type="button">▲</button>
+                <button class="btn small ${mv===-1?'danger':''}" data-vote="down" data-id="${s.id}" type="button">▼</button>
+              </div>
+            </div>
+
+            ${state.isAdmin ? `
+              <div class="hr"></div>
+              <div class="row">
+                <button class="btn small warn" data-admin="accept" data-id="${s.id}" type="button">Accept</button>
+                <button class="btn small danger" data-admin="reject" data-id="${s.id}" type="button">Reject</button>
+                <button class="btn small good" data-admin="promote" data-id="${s.id}" type="button">Promote to Question</button>
+              </div>
+            ` : ``}
+          </div>
+        `;
+      }).join("");
+
+      $list.querySelectorAll("[data-vote]").forEach(btn=>{
+        btn.onclick = ()=>{
+          const id = btn.getAttribute("data-id");
+          const type = btn.getAttribute("data-vote");
+          vote(id, type==="up" ? 1 : -1);
+        };
+      });
+
+      if(state.isAdmin){
+        $list.querySelectorAll("[data-admin]").forEach(btn=>{
+          btn.onclick = async ()=>{
+            const id = btn.getAttribute("data-id");
+            const act = btn.getAttribute("data-admin");
+            if(act==="accept") return adminSetStatus(id, "accepted");
+            if(act==="reject") return adminSetStatus(id, "rejected");
+            if(act==="promote"){
+              const sug = out.find(x=>x.id===id);
+              if(!sug) return;
+              return adminPromoteToQuestion(sug);
+            }
+          };
+        });
+      }
+    }
+
+    await loadSuggestions("pending");
+  }
+
+  async function renderAdmin(){
+    if(!state.user){
+      $app.innerHTML = `<div class="card"><h2>Admin</h2><div class="smallnote muted">Sign in first.</div></div>`;
+      return;
+    }
+    if(!state.isAdmin){
+      $app.innerHTML = `
+        <div class="card">
+          <h2>Admin</h2>
+          <div class="smallnote muted">
+            Access denied. To become admin, create a Firestore document:
+            <div class="spacer"></div>
+            <div class="mono">admins/${htmlEscape(state.user.uid)}</div>
+          </div>
+        </div>
+      `;
+      return;
+    }
+
+    const sectorOpts = SECTORS.map(s=>`<option value="${s.key}">${htmlEscape(s.name)} (${s.key})</option>`).join("");
+
+    $app.innerHTML = `
+      <div class="grid cols2">
+        <div class="card">
+          <h2>Questions</h2>
+          <div class="smallnote muted">Add/disable questions. Each question has: direction (sector), weight, tags.</div>
+          <div class="hr"></div>
+
+          <label>Question text</label>
+          <textarea id="q_text" placeholder="Statement / question..."></textarea>
+          <div class="spacer"></div>
+
+          <div class="split">
+            <div>
+              <label>Direction</label>
+              <select id="q_dir">${sectorOpts}</select>
+            </div>
+            <div>
+              <label>Weight</label>
+              <input id="q_weight" type="number" step="0.05" value="1.00" />
+            </div>
+          </div>
+
+          <div class="spacer"></div>
+          <label>Tags (comma-separated)</label>
+          <input id="q_tags" placeholder="e.g. economy, nationalism, religion, lgbtq, authority" />
+          <div class="spacer"></div>
+
+          <div class="row">
+            <button id="q_add" class="btn good" type="button">Add question</button>
+            <button id="q_seed" class="btn warn" type="button">Seed sample questions</button>
+            <button id="q_refresh" class="btn" type="button">Refresh list</button>
+          </div>
+
+          <div class="hr"></div>
+          <div id="q_list" class="list"></div>
+        </div>
+
+        <div class="card">
+          <h2>Scoring settings</h2>
+          <div class="smallnote muted">Admin can modify answer values, importance multipliers, and synergy parameters (JSON).</div>
+          <div class="hr"></div>
+
+          <label>settings/scoring (JSON)</label>
+          <textarea id="set_json" class="mono" spellcheck="false"></textarea>
+          <div class="spacer"></div>
+          <div class="row">
+            <button id="set_save" class="btn good" type="button">Save settings</button>
+            <button id="set_reset" class="btn danger" type="button">Reset to defaults (local)</button>
+            <button id="set_reload" class="btn" type="button">Reload from Firestore</button>
+          </div>
+          <div class="spacer"></div>
+          <div class="smallnote muted">
+            Changing scales affects future attempts, but each attempt stores a snapshot of settings for transparency.
+          </div>
+        </div>
+      </div>
+    `;
+
+    // populate settings editor
+    document.getElementById("set_json").value = JSON.stringify(state.settings, null, 2);
+
+    document.getElementById("set_reset").onclick = ()=>{
+      document.getElementById("set_json").value = JSON.stringify(DEFAULT_SETTINGS, null, 2);
+      toast("Reset editor to defaults (not saved yet).");
+    };
+
+    document.getElementById("set_reload").onclick = async ()=>{
+      await loadSettings();
+      document.getElementById("set_json").value = JSON.stringify(state.settings, null, 2);
+      toast("Reloaded from Firestore.");
+    };
+
+    document.getElementById("set_save").onclick = async ()=>{
+      try{
+        const txt = document.getElementById("set_json").value;
+        const obj = JSON.parse(txt);
+        await setDoc(doc(db,"settings","scoring"), obj, { merge:false });
+        await loadSettings();
+        toast("Settings saved.");
+      }catch(e){
+        toast("Save failed: " + (e?.message || e));
+      }
+    };
+
+    async function refreshQuestionList(){
+      // load ALL questions (enabled + disabled)
+      const out = [];
+      try{
+        const snap = await getDocs(query(collection(db,"questions"), orderBy("createdAt","desc"), limit(200)));
+        snap.forEach(d=> out.push({ id:d.id, ...d.data() }));
+      }catch(e){
+        const snap = await getDocs(collection(db,"questions"));
+        snap.forEach(d=> out.push({ id:d.id, ...d.data() }));
+        out.sort((a,b)=> (b.createdAt?.seconds||0)-(a.createdAt?.seconds||0));
+      }
+
+      const $list = document.getElementById("q_list");
+      $list.innerHTML = out.map(q=>{
+        const sec = SECTORS.find(s=>s.key===q.direction);
+        const col = sec?.color || "#aaa";
+        const tags = Array.isArray(q.tags) ? q.tags : [];
+        const en = q.enabled === true;
+
+        return `
+          <div class="item">
+            <div class="top">
+              <div style="flex:1">
+                <div class="title">${htmlEscape(q.text)}</div>
+                <div class="meta">
+                  ${en ? `<span class="badge good">Enabled</span>` : `<span class="badge bad">Disabled</span>`}
+                  <span class="badge" style="border-color:${hexToRgba(col,.4)}; background:${hexToRgba(col,.12)}; color:#e9eefc">
+                    Dir: <b style="color:${col}">${htmlEscape(q.direction)}</b>
+                  </span>
+                  <span class="badge">Weight: <span class="mono">${Number(q.weight ?? 1).toFixed(2)}</span></span>
+                  <span class="badge">By: <span class="mono">${htmlEscape(q.createdBy || "—")}</span></span>
+                </div>
+                ${tags.length ? `<div class="chips" style="margin-top:6px">${tags.map(t=>`<span class="chip">#${htmlEscape(t)}</span>`).join("")}</div>` : ``}
+              </div>
+              <div class="row">
+                <button class="btn small ${en?'danger':'good'}" data-qtoggle="${q.id}" type="button">
+                  ${en ? "Disable" : "Enable"}
+                </button>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join("");
+
+      $list.querySelectorAll("[data-qtoggle]").forEach(btn=>{
+        btn.onclick = async ()=>{
+          const id = btn.getAttribute("data-qtoggle");
+          const cur = out.find(x=>x.id===id);
+          if(!cur) return;
+          try{
+            await updateDoc(doc(db,"questions", id), { enabled: !(cur.enabled===true) });
+            toast("Updated.");
+            await loadQuestions();
+            await refreshQuestionList();
+          }catch(e){
+            toast("Failed: " + (e?.message || e));
+          }
+        };
+      });
+    }
+
+    document.getElementById("q_refresh").onclick = refreshQuestionList;
+
+    document.getElementById("q_add").onclick = async ()=>{
+      const text = document.getElementById("q_text").value.trim();
+      const direction = document.getElementById("q_dir").value;
+      const weight = Number(document.getElementById("q_weight").value || 1);
+      const tags = (document.getElementById("q_tags").value || "")
+        .split(",").map(t=>t.trim()).filter(Boolean);
+
+      if(text.length < 8) return toast("Write a longer question.");
+      if(!SECTORS.some(s=>s.key===direction)) return toast("Invalid direction.");
+
+      try{
+        await addDoc(collection(db,"questions"), {
+          text,
+          direction,
+          weight: clamp(weight, 0.05, 5),
+          tags,
+          enabled: true,
+          createdBy: state.user.uid,
+          createdAt: serverTimestamp()
+        });
+        toast("Question added.");
+        document.getElementById("q_text").value = "";
+        document.getElementById("q_tags").value = "";
+        await loadQuestions();
+        await refreshQuestionList();
+      }catch(e){
+        toast("Failed: " + (e?.message || e));
+      }
+    };
+
+    document.getElementById("q_seed").onclick = async ()=>{
+      // a few neutral, non-extremist example statements — replace freely
+      const samples = [
+        { text:"A strong national identity is important for social cohesion.", direction:"BLUE", weight:1.0, tags:["nationalism","identity"] },
+        { text:"Economic inequality is one of the biggest sources of social instability.", direction:"GREEN", weight:1.0, tags:["economy","inequality"] },
+        { text:"Tradition should be preserved even when it conflicts with modern social trends.", direction:"BROWN", weight:1.0, tags:["tradition","culture"] },
+        { text:"Markets should be regulated when they produce major harms.", direction:"RED", weight:1.0, tags:["economy","regulation"] },
+        { text:"Individual liberties should generally be prioritized over state control.", direction:"PURPLE", weight:1.0, tags:["liberty","state"] },
+        { text:"A nation should be economically self-sufficient where possible.", direction:"REDBROWN", weight:1.0, tags:["economy","nationalism"] },
+      ];
+
+      try{
+        for(const s of samples){
+          await addDoc(collection(db,"questions"), {
+            ...s,
+            enabled: true,
+            createdBy: state.user.uid,
+            createdAt: serverTimestamp()
+          });
+        }
+        toast("Seeded sample questions.");
+        await loadQuestions();
+        await refreshQuestionList();
+      }catch(e){
+        toast("Seed failed: " + (e?.message || e));
+      }
+    };
+
+    await refreshQuestionList();
+  }
+
+  // ---- Router render ----
+  async function render(){
+    const r = route();
+    const [p0, p1] = r.parts;
+
+    // always keep UI chrome accurate
+    if(state.user){
+      $userTag.textContent = `${state.user.displayName || "User"} · ${state.user.email || ""}`.trim();
+      $authBtn.style.display = "none";
+      $signOutBtn.style.display = "inline-flex";
+    }else{
+      $userTag.textContent = "Not signed in";
+      $authBtn.style.display = "inline-flex";
+      $signOutBtn.style.display = "none";
+    }
+
+    $adminLink.style.display = state.isAdmin ? "inline-flex" : "none";
+
+    if(p0 === "login") return showAuthModal();
+    if(p0 === "quiz") return renderQuiz();
+    if(p0 === "ledger") return renderLedger();
+    if(p0 === "attempt" && p1) return renderAttemptPage(p1, false);
+    if(p0 === "share" && p1) return renderAttemptPage(p1, true);
+    if(p0 === "suggest") return renderSuggest();
+    if(p0 === "admin") return renderAdmin();
+    if(p0 === "compare") return renderCompare();
+    return renderHome();
+  }
+
+  // ---- Boot ----
+  async function bootSignedIn(user){
+    state.user = user;
+    state.isAdmin = user ? await checkAdmin(user.uid) : false;
+
+    await loadSettings();
+    await loadQuestions();
+    await render();
+  }
+
+  onAuthStateChanged(auth, async (user)=>{
+    await bootSignedIn(user);
+  });
+
+  window.addEventListener("hashchange", render);
+
+  // initial render (before auth resolves)
+  render();
+</script>
+</body>
+</html>
