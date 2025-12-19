@@ -166,7 +166,9 @@
         <div class="logo"></div>
         <div>
           <h1>Hexa-Political Compass</h1>
-          <div class="sub">Poles are the 6 political positions; colours are the bridging filters between poles (each split into two slices).</div>
+          <div class="sub">
+            Poles are the 6 political positions (corners). Colours are bridging filters between adjacent poles (each split into two slices).
+          </div>
         </div>
       </div>
 
@@ -226,28 +228,25 @@
   const db = getFirestore(app);
 
   // ============================
-  // MODEL (ROTATED to match your original layout)
+  // MODEL (ROTATED TO YOUR REQUEST)
   // ============================
-  // Coordinate convention: 0° = 3 o'clock (right), 90° = 12 o'clock (up).
+  // Corners (poles) are positioned so that:
+  // - Third-Position is at 12:00
+  // - Third is between Red-Brown & Brown
+  // - Reactionary between Brown & Blue
+  // - Right-wing between Blue & Purple
+  // - Centrist between Purple & Green
+  // - Left-wing between Red & Green
+  // - Syncretic between Red & Red-Brown
   //
-  // REQUIRED corner mapping (your request):
-  // Third-Position corner = between Red-Brown & Brown, and it is at 12:00.
-  // Reactionary corner    = between Brown & Blue
-  // Right-wing corner     = between Blue & Purple
-  // Centrist corner       = between Purple & Green
-  // Left-wing corner      = between Green & Red
-  // Syncretic corner      = between Red & Red-Brown
-  //
-  // Sector order clockwise: Brown → Blue → Purple → Green → Red → Red-Brown → (back to Brown)
-
+  // Using standard math angles (0° right, 90° up; y rendered upwards by drawing with -sin),
+  // the pole angles become:
+  // Third 90, Reactionary 30, Right 330, Centrist 270, Left 210, Syncretic 150.
   function getCSS(varName){ return getComputedStyle(document.documentElement).getPropertyValue(varName).trim(); }
   function rad(deg){ return deg * Math.PI / 180; }
   function clamp(x,a,b){ return Math.max(a, Math.min(b, x)); }
   function to360(deg){ let d = deg % 360; if(d < 0) d += 360; return d; }
 
-  // Poles = borders/vertices (ROTATED)
-  // Third-Position at 90° (12 o'clock), then clockwise every 60°:
-  // Reactionary 30°, Right-wing 330°, Centrist 270°, Left-wing 210°, Syncretic 150°
   const POLES = [
     { key:"THIRD",       name:"Third-Position Politics", angle360:  90 },
     { key:"REACTIONARY", name:"Reactionary Politics",    angle360:  30 },
@@ -257,47 +256,45 @@
     { key:"SYNCRETIC",   name:"Syncretic Politics",      angle360: 150 },
   ];
 
-  // Colour sectors = bridging filters (ROTATED)
-  // Midpoints between their two pole borders:
-  // Brown 60°, Blue 0°, Purple 300°, Green 240°, Red 180°, Red-Brown 120°
+  // Colour sectors (filters) are the bridging wedges BETWEEN adjacent pole corners.
+  // Their centers are the mid-angles between those corners.
   const SECTORS = [
-    { key:"BROWN",    colorName:"Brown",     name:"Absolutist Right",      color:getCSS("--brown"),    angleDeg:  60 },
     { key:"BLUE",     colorName:"Blue",      name:"Traditional Right",     color:getCSS("--blue"),     angleDeg:   0 },
-    { key:"PURPLE",   colorName:"Purple",    name:"Libertarian Right",     color:getCSS("--purple"),   angleDeg: 300 },
-    { key:"GREEN",    colorName:"Green",     name:"Libertarian Left",      color:getCSS("--green"),    angleDeg: 240 },
-    { key:"RED",      colorName:"Red",       name:"Statist Left",          color:getCSS("--red"),      angleDeg: 180 },
+    { key:"BROWN",    colorName:"Brown",     name:"Absolutist Right",      color:getCSS("--brown"),    angleDeg:  60 },
     { key:"REDBROWN", colorName:"Red-Brown", name:"Totalitarian Center",   color:getCSS("--redbrown"), angleDeg: 120 },
+    { key:"RED",      colorName:"Red",       name:"Statist Left",          color:getCSS("--red"),      angleDeg: 180 },
+    { key:"GREEN",    colorName:"Green",     name:"Libertarian Left",      color:getCSS("--green"),    angleDeg: 240 },
+    { key:"PURPLE",   colorName:"Purple",    name:"Libertarian Right",     color:getCSS("--purple"),   angleDeg: 300 },
   ];
 
   const GREY = { key:"GREY", name:"Grey (Center)", color:getCSS("--grey") };
 
-  // Sector ranges in [0,360): start inclusive, end exclusive.
-  // These are defined CCW (increasing angles), with wrap handled for Blue.
-  //
-  // With your layout:
-  // Brown spans Reactionary(30) → Third(90)
-  // Red-Brown spans Third(90) → Syncretic(150)
-  // Red spans Syncretic(150) → Left(210)
-  // Green spans Left(210) → Centrist(270)
-  // Purple spans Centrist(270) → Right(330)
-  // Blue spans Right(330) → Reactionary(30) (wrap)
+  // Sector ranges are defined CCW from start boundary to end boundary (length 60° each).
+  // Start/end angles are POLE angles (corners).
+  // Slice names lean toward one pole boundary or the other (as per your excerpt).
   const SECTOR_RANGES = [
-    { sectorKey:"BROWN", start: 30, end: 90, startPole:"REACTIONARY", endPole:"THIRD",
+    // Brown wedge between Reactionary(30) and Third(90)
+    { sectorKey:"BROWN",    start: 30, end: 90,  startPole:"REACTIONARY", endPole:"THIRD",
       sliceNearStart:"Reactionary Partner", sliceNearEnd:"Third-Position Right" },
 
-    { sectorKey:"REDBROWN", start: 90, end:150, startPole:"THIRD", endPole:"SYNCRETIC",
+    // Red-Brown wedge between Third(90) and Syncretic(150)
+    { sectorKey:"REDBROWN", start: 90, end:150,  startPole:"THIRD", endPole:"SYNCRETIC",
       sliceNearStart:"Third-Position Partner", sliceNearEnd:"Syncretic Partner" },
 
-    { sectorKey:"RED", start:150, end:210, startPole:"SYNCRETIC", endPole:"LEFT",
+    // Red wedge between Syncretic(150) and Left(210)
+    { sectorKey:"RED",      start:150, end:210,  startPole:"SYNCRETIC", endPole:"LEFT",
       sliceNearStart:"Syncretic-Left", sliceNearEnd:"Formal Left" },
 
-    { sectorKey:"GREEN", start:210, end:270, startPole:"LEFT", endPole:"CENTRIST",
+    // Green wedge between Left(210) and Centrist(270)
+    { sectorKey:"GREEN",    start:210, end:270,  startPole:"LEFT", endPole:"CENTRIST",
       sliceNearStart:"Formal Left", sliceNearEnd:"Centrist-Left" },
 
-    { sectorKey:"PURPLE", start:270, end:330, startPole:"CENTRIST", endPole:"RIGHT",
+    // Purple wedge between Centrist(270) and Right(330)
+    { sectorKey:"PURPLE",   start:270, end:330,  startPole:"CENTRIST", endPole:"RIGHT",
       sliceNearStart:"Centrist-Right", sliceNearEnd:"Formal Right" },
 
-    { sectorKey:"BLUE", start:330, end: 30, startPole:"RIGHT", endPole:"REACTIONARY",
+    // Blue wedge between Right(330) and Reactionary(30) (wrap)
+    { sectorKey:"BLUE",     start:330, end: 30,  startPole:"RIGHT", endPole:"REACTIONARY",
       sliceNearStart:"Formal Right", sliceNearEnd:"Reactionary-Right" },
   ];
 
@@ -385,7 +382,7 @@
     return !!(state.user && state.user.isAnonymous);
   }
 
-  // ---- Auth modal ----
+  // ---- Auth modal (upgrade guest OR sign in/register) ----
   function showAuthModal(){
     const guestNote = isGuest()
       ? `<span class="badge warn">You are currently browsing as Guest</span>
@@ -569,28 +566,37 @@
     return state.settings.importanceScale.find(i=>Number(i.key)===Number(n)) || state.settings.importanceScale[2];
   }
 
+  function angleDist(a,b){
+    let d = Math.abs(a-b);
+    if(d > 180) d = 360 - d;
+    return d;
+  }
+
   function nearestPole(angle360){
-    const dist = (a,b)=>{
-      let d = Math.abs(a-b);
-      if(d > 180) d = 360 - d;
-      return d;
-    };
     let best = null;
     for(const p of POLES){
-      const d = dist(angle360, p.angle360);
+      const d = angleDist(angle360, p.angle360);
       if(!best || d < best.d) best = { pole:p, d };
     }
-    return best;
+    return best; // {pole, d}
+  }
+
+  function sectorContainsAngle(sr, angle360){
+    // sr.start->sr.end CCW, possibly wrap when start > end
+    if(sr.start === sr.end) return false;
+    if(sr.start < sr.end) return (sr.start <= angle360 && angle360 < sr.end);
+    // wrap
+    return (angle360 >= sr.start || angle360 < sr.end);
+  }
+
+  function ccwDist(from, to){
+    // distance going CCW from 'from' to 'to' in [0,360)
+    return (to - from + 360) % 360;
   }
 
   function sectorFromAngle(angle360){
     for(const s of SECTOR_RANGES){
-      if(s.start < s.end){
-        if(s.start <= angle360 && angle360 < s.end) return s;
-      }else{
-        // wrap (e.g. 330 -> 30)
-        if(angle360 >= s.start || angle360 < s.end) return s;
-      }
+      if(sectorContainsAngle(s, angle360)) return s;
     }
     return SECTOR_RANGES[0];
   }
@@ -615,20 +621,15 @@
     }
 
     const angleRad = Math.atan2(y,x);
-    let deg = angleRad * 180/Math.PI;
-    let a360 = to360(deg);
+    let deg = angleRad * 180/Math.PI;   // [-180,180]
+    let a360 = to360(deg);              // [0,360)
 
     const sr = sectorFromAngle(a360);
     const sector = SECTORS.find(s=>s.key===sr.sectorKey);
 
-    const span = (sr.end - sr.start + 360) % 360; // always 60 here
-    let distToStart;
-    if(sr.start < sr.end){
-      distToStart = a360 - sr.start;
-    }else{
-      distToStart = (a360 >= sr.start) ? (a360 - sr.start) : (360 - sr.start + a360);
-    }
-    const distToEnd = span - distToStart;
+    // distances within wedge (always 60°)
+    const distToStart = ccwDist(sr.start, a360);
+    const distToEnd = ccwDist(a360, sr.end);
     const nearerStart = (distToStart <= distToEnd);
 
     const sliceName = nearerStart ? sr.sliceNearStart : sr.sliceNearEnd;
@@ -730,6 +731,7 @@
       });
     }
 
+    // Synergy inference
     if(state.settings.synergy?.enabled){
       for(const row of breakdown){
         const q = questions.find(qq=>qq.id===row.qid);
@@ -777,15 +779,15 @@
     let x = rawX / maxSum;
     let y = rawY / maxSum;
 
-    const rr = Math.hypot(x,y);
-    if(rr > 1){ x /= rr; y /= rr; }
+    const r = Math.hypot(x,y);
+    if(r > 1){ x /= r; y /= r; }
 
     const cls = classifyPoint(x,y);
     return { x, y, r: Math.hypot(x,y), classification: cls, breakdown, synergyNotes, maxSum };
   }
 
   // ============================
-  // CANVAS DRAWING
+  // CANVAS DRAWING (HEXAGON ROTATED)
   // ============================
   function hexToRgba(hex, a){
     const h = (hex||"").trim();
@@ -798,6 +800,15 @@
     return `rgba(255,255,255,${a})`;
   }
 
+  function textAlignForAngle(angle360){
+    // for corner labels
+    const a = to360(angle360);
+    if(a === 90) return { align:"center", base:"bottom" };
+    if(a === 270) return { align:"center", base:"top" };
+    if(a > 90 && a < 270) return { align:"right", base:"middle" };
+    return { align:"left", base:"middle" };
+  }
+
   function drawCompass(canvas, points){
     const ctx = canvas.getContext("2d");
     const W = canvas.width, H = canvas.height;
@@ -806,32 +817,53 @@
     const cx = W/2, cy = H/2;
     const R = Math.min(W,H) * 0.42;
 
-    // draw colour wedges (filters) using sector midpoints
-    const verts = SECTORS
-      .slice()
-      .sort((a,b)=> to360(a.angleDeg) - to360(b.angleDeg))
-      .map(s=>{
-        const a = rad(s.angleDeg);
-        return { s, x: cx + Math.cos(a)*R, y: cy - Math.sin(a)*R };
-      });
+    // Corner points (poles) in CCW order for polygon drawing
+    const polesSorted = [...POLES].sort((a,b)=> a.angle360 - b.angle360);
+    const corner = new Map(); // angle360 -> {x,y,pole}
+    for(const p of polesSorted){
+      const a = rad(p.angle360);
+      const x = cx + Math.cos(a)*R;
+      const y = cy - Math.sin(a)*R;
+      corner.set(p.angle360, { x, y, pole:p });
+    }
 
-    for(let i=0;i<verts.length;i++){
-      const s = verts[i].s;
-      const v1 = verts[i];
-      const v2 = verts[(i+1)%verts.length];
+    // Draw coloured wedges: each sector range is triangle center -> start corner -> end corner
+    for(const sr of SECTOR_RANGES){
+      const sec = SECTORS.find(s=>s.key===sr.sectorKey);
+      const col = sec?.color || "#aaa";
+
+      // start/end are pole corners
+      const pStart = POLES.find(p=>p.key===sr.startPole);
+      const pEnd   = POLES.find(p=>p.key===sr.endPole);
+
+      const cStart = corner.get(pStart.angle360);
+      const cEnd   = corner.get(pEnd.angle360);
 
       ctx.beginPath();
-      ctx.moveTo(cx,cy);
-      ctx.lineTo(v1.x,v1.y);
-      ctx.lineTo(v2.x,v2.y);
+      ctx.moveTo(cx, cy);
+      ctx.lineTo(cStart.x, cStart.y);
+      ctx.lineTo(cEnd.x, cEnd.y);
       ctx.closePath();
-      ctx.fillStyle = hexToRgba(s.color, 0.22);
+      ctx.fillStyle = hexToRgba(col, 0.22);
       ctx.fill();
       ctx.strokeStyle = "rgba(255,255,255,.08)";
       ctx.stroke();
     }
 
-    // grey center
+    // Hexagon outline
+    ctx.beginPath();
+    const first = corner.get(polesSorted[0].angle360);
+    ctx.moveTo(first.x, first.y);
+    for(let i=1;i<polesSorted.length;i++){
+      const p = corner.get(polesSorted[i].angle360);
+      ctx.lineTo(p.x, p.y);
+    }
+    ctx.closePath();
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = "rgba(255,255,255,.14)";
+    ctx.stroke();
+
+    // Grey center (liminal)
     ctx.beginPath();
     ctx.arc(cx,cy, R*state.settings.centerRadius, 0, Math.PI*2);
     ctx.fillStyle = hexToRgba(GREY.color, 0.28);
@@ -840,6 +872,7 @@
     ctx.stroke();
 
     // guide circles
+    ctx.lineWidth = 1;
     for(const k of [0.25, 0.5, 0.75, 1.0]){
       ctx.beginPath();
       ctx.arc(cx,cy, R*k, 0, Math.PI*2);
@@ -847,35 +880,30 @@
       ctx.stroke();
     }
 
-    // pole boundary lines + labels (poles = vertices/borders)
-    ctx.lineWidth = 1;
+    // Label corners (poles) near the vertices (outside the hexagon)
     for(const p of POLES){
       const a = rad(p.angle360);
-      const x2 = cx + Math.cos(a)*R;
-      const y2 = cy - Math.sin(a)*R;
+      const lx = cx + Math.cos(a)*(R*1.20);
+      const ly = cy - Math.sin(a)*(R*1.20);
 
-      ctx.beginPath();
-      ctx.moveTo(cx,cy);
-      ctx.lineTo(x2,y2);
-      ctx.strokeStyle = "rgba(255,255,255,.10)";
-      ctx.stroke();
-
-      const lx = cx + Math.cos(a)*(R*1.15);
-      const ly = cy - Math.sin(a)*(R*1.15);
+      const ta = textAlignForAngle(p.angle360);
       ctx.font = "12px system-ui";
-      ctx.fillStyle = "rgba(233,238,252,.82)";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText(p.name.replace(" Politics",""), lx, ly);
+      ctx.fillStyle = "rgba(233,238,252,.88)";
+      ctx.textAlign = ta.align;
+      ctx.textBaseline = ta.base;
+
+      // keep labels short-ish on the canvas
+      const short = p.name.replace(" Politics","");
+      ctx.fillText(short, lx, ly);
     }
 
-    // label sector filter names inside wedges
+    // Label sector names inside wedges (filters)
     for(const s of SECTORS){
       const a = rad(s.angleDeg);
       const lx = cx + Math.cos(a)*(R*0.58);
       const ly = cy - Math.sin(a)*(R*0.58);
       ctx.font = "11px system-ui";
-      ctx.fillStyle = "rgba(233,238,252,.70)";
+      ctx.fillStyle = "rgba(233,238,252,.72)";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.fillText(s.name, lx, ly);
@@ -904,6 +932,7 @@
         ctx.font = "12px system-ui";
         ctx.fillStyle = "rgba(233,238,252,.9)";
         ctx.textAlign = "left";
+        ctx.textBaseline = "alphabetic";
         ctx.fillText(p.label, px + 10, py - 10);
       }
     }
@@ -916,16 +945,21 @@
     $app.innerHTML = `
       <div class="grid cols2">
         <div class="card">
-          <h2>How your model works</h2>
+          <h2>How it’s oriented now</h2>
           <div class="smallnote">
-            <b>Poles (the borders/vertices)</b> are the six political positions:
-            Right-wing, Reactionary, Third-Position, Syncretic, Left-wing, Centrist.
+            Corners (poles) are placed so that <b>Third-Position</b> is at <b>12:00</b>.
+            Each colour wedge is the <b>bridge/filter</b> between adjacent poles.
             <div class="spacer"></div>
-            <b>Colours (the sectors)</b> are <i>bridging filters</i> between adjacent poles. Each colour sector is split into two slices:
-            one slice leans toward one pole-border, the other slice leans toward the other pole-border.
+            Corner adjacency (as requested):
             <div class="spacer"></div>
-            <span class="badge warn">Radicalism</span> is distance from center; the grey center is liminal.
-            If you are far out and close to a pole-line, you can be classified as <b>Pure</b> that pole.
+            <span class="badge">Third ↔ (Red-Brown & Brown)</span>
+            <span class="badge">Reactionary ↔ (Brown & Blue)</span>
+            <span class="badge">Right ↔ (Blue & Purple)</span>
+            <span class="badge">Centrist ↔ (Purple & Green)</span>
+            <span class="badge">Left ↔ (Red & Green)</span>
+            <span class="badge">Syncretic ↔ (Red & Red-Brown)</span>
+            <div class="spacer"></div>
+            The two slices inside a wedge are decided by which corner you’re closer to.
           </div>
           <div class="hr"></div>
           <div class="row">
@@ -935,7 +969,7 @@
           </div>
           <div class="spacer"></div>
           <div class="smallnote muted">
-            Guest mode is automatic (anonymous auth). You don’t need an account to take the test, save attempts, share, or compare.
+            Guest mode is automatic. You don’t need an account to take the test, save attempts, share, or compare.
           </div>
         </div>
 
@@ -946,14 +980,14 @@
           </div>
           <div class="spacer"></div>
           <div class="smallnote muted">
-            Third-Position is at 12 o'clock, matching your original corner layout.
+            Pole labels sit at the corners. Sector labels sit inside wedges.
           </div>
         </div>
       </div>
     `;
     drawCompass(document.getElementById("c_preview"), [
       { x:0.00, y:0.00, label:"Center", color:"rgba(107,114,128,.95)" },
-      { x:0.62, y:0.18, label:"Example", color:"rgba(124,156,255,.95)" },
+      { x:0.60, y:0.05, label:"Example", color:"rgba(124,156,255,.95)" },
     ]);
   }
 
@@ -981,7 +1015,7 @@
         <div class="card">
           <h2>Test</h2>
           <div class="smallnote muted">
-            Questions push you toward a <b>colour sector (filter)</b>. Your final point is then classified by pole/sector/slice.
+            Questions push you toward a <b>colour sector (filter wedge)</b>. Your final point is then classified by pole/sector/slice.
           </div>
           <div class="hr"></div>
 
@@ -1636,7 +1670,7 @@
 
           <div class="split">
             <div>
-              <label>Filter direction (colour sector)</label>
+              <label>Filter direction (colour wedge)</label>
               <select id="s_dir">${sectorOpts}</select>
             </div>
             <div>
@@ -1911,7 +1945,7 @@
       <div class="grid cols2">
         <div class="card">
           <h2>Questions</h2>
-          <div class="smallnote muted">Add/disable questions. Each question pushes toward a <b>filter (colour sector)</b>.</div>
+          <div class="smallnote muted">Add/disable questions. Each question pushes toward a <b>filter wedge (colour sector)</b>.</div>
           <div class="hr"></div>
 
           <label>Question text</label>
@@ -1920,7 +1954,7 @@
 
           <div class="split">
             <div>
-              <label>Filter direction (colour sector)</label>
+              <label>Filter direction (colour wedge)</label>
               <select id="q_dir">${sectorOpts}</select>
             </div>
             <div>
@@ -2112,6 +2146,7 @@
     const r = route();
     const [p0, p1] = r.parts;
 
+    // header state
     if(state.user){
       if(state.user.isAnonymous){
         $userTag.textContent = `Guest · ${state.user.uid.slice(0,8)}…`;
@@ -2152,6 +2187,7 @@
   onAuthStateChanged(auth, async (user)=>{
     try{
       if(!user){
+        // Automatic Guest mode
         await signInAnonymously(auth);
         return;
       }
