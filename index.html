@@ -205,7 +205,7 @@
     EmailAuthProvider, linkWithCredential
   } from "https://www.gstatic.com/firebasejs/12.7.0/firebase-auth.js";
   import {
-    getFirestore, doc, getDoc, setDoc, updateDoc, addDoc,
+    getFirestore, doc, getDoc, setDoc, updateDoc, addDoc, deleteDoc,
     collection, query, where, orderBy, limit, getDocs,
     serverTimestamp, runTransaction, increment
   } from "https://www.gstatic.com/firebasejs/12.7.0/firebase-firestore.js";
@@ -254,15 +254,15 @@
   // Their centers are mid-angles of adjacent corners:
   // Brown(60), Blue(0), Purple(300), Green(240), Red(180), Red-Brown(120).
   const SECTORS = [
-    { key:"BROWN",    colorName:"Brown",     name:"Para-Fascism",      color:getCSS("--brown"),    angleDeg:  60 },
-    { key:"BLUE",     colorName:"Blue",      name:"Statist Right",     color:getCSS("--blue"),     angleDeg:   0 },
-    { key:"PURPLE",   colorName:"Purple",    name:"Libertarian Right",     color:getCSS("--purple"),   angleDeg: 300 },
-    { key:"GREEN",    colorName:"Green",     name:"Libertarian Left",      color:getCSS("--green"),    angleDeg: 240 },
-    { key:"RED",      colorName:"Red",       name:"Statist Left",          color:getCSS("--red"),      angleDeg: 180 },
+    { key:"BROWN",    colorName:"Brown",     name:"Para-Fascism",            color:getCSS("--brown"),    angleDeg:  60 },
+    { key:"BLUE",     colorName:"Blue",      name:"Statist Right",          color:getCSS("--blue"),     angleDeg:   0 },
+    { key:"PURPLE",   colorName:"Purple",    name:"Libertarian Right",      color:getCSS("--purple"),   angleDeg: 300 },
+    { key:"GREEN",    colorName:"Green",     name:"Libertarian Left",       color:getCSS("--green"),    angleDeg: 240 },
+    { key:"RED",      colorName:"Red",       name:"Statist Left",           color:getCSS("--red"),      angleDeg: 180 },
     { key:"REDBROWN", colorName:"Red-Brown", name:"Intransigent Fascism",   color:getCSS("--redbrown"), angleDeg: 120 },
   ];
 
-  const GREY = { key:"GREY", name:"Apoliticism", color:getCSS("--grey") };
+  const GREY = { key:"GREY", name:"Grey (Center)", color:getCSS("--grey") };
 
   // Sector ranges in [0,360), defined by corner/pole boundaries.
   // IMPORTANT: Blue wraps (330 -> 30).
@@ -297,12 +297,12 @@
 
   // For drawing: edge -> sector mapping (between adjacent corners, clockwise).
   const EDGE_SECTORS_CLOCKWISE = [
-    { sectorKey:"BROWN",    poleA:"THIRD",     poleB:"REACTIONARY" },
+    { sectorKey:"BROWN",    poleA:"THIRD",       poleB:"REACTIONARY" },
     { sectorKey:"BLUE",     poleA:"REACTIONARY", poleB:"RIGHT" },
-    { sectorKey:"PURPLE",   poleA:"RIGHT",     poleB:"CENTRIST" },
-    { sectorKey:"GREEN",    poleA:"CENTRIST",  poleB:"LEFT" },
-    { sectorKey:"RED",      poleA:"LEFT",      poleB:"SYNCRETIC" },
-    { sectorKey:"REDBROWN", poleA:"SYNCRETIC", poleB:"THIRD" },
+    { sectorKey:"PURPLE",   poleA:"RIGHT",       poleB:"CENTRIST" },
+    { sectorKey:"GREEN",    poleA:"CENTRIST",    poleB:"LEFT" },
+    { sectorKey:"RED",      poleA:"LEFT",        poleB:"SYNCRETIC" },
+    { sectorKey:"REDBROWN", poleA:"SYNCRETIC",   poleB:"THIRD" },
   ];
 
   // ---- Default scoring settings (admin can override in Firestore) ----
@@ -323,11 +323,11 @@
       { key:"SA", label:"Strongly Agree",    value: 1.0 },
     ],
     importanceScale: [
-      { key:1, label:"Low importance",    mult:0.6 },
-      { key:2, label:"Somewhat important",mult:0.85 },
-      { key:3, label:"Important",         mult:1.0 },
-      { key:4, label:"Very important",    mult:1.15 },
-      { key:5, label:"Core / defining",   mult:1.3 },
+      { key:1, label:"Low importance",     mult:0.6 },
+      { key:2, label:"Somewhat important", mult:0.85 },
+      { key:3, label:"Important",          mult:1.0 },
+      { key:4, label:"Very important",     mult:1.15 },
+      { key:5, label:"Core / defining",    mult:1.3 },
     ],
     synergy: {
       enabled: true,
@@ -829,7 +829,7 @@
       const A = polePos.get(e.poleA);
       const B = polePos.get(e.poleB);
       if (!sector || !A || !B) continue;
-    
+
       // sector triangle fill
       ctx.beginPath();
       ctx.moveTo(cx, cy);
@@ -840,11 +840,11 @@
       ctx.fill();
       ctx.strokeStyle = "rgba(255,255,255,.08)";
       ctx.stroke();
-    
+
       // sector label at mid-angle between corners
       const m = midAngle(A.a360, B.a360);
       const ma = rad(m);
-    
+
       const lx = cx + Math.cos(ma) * (R * 0.58);
       const ly = cy - Math.sin(ma) * (R * 0.58);
       ctx.font = "11px system-ui";
@@ -852,31 +852,31 @@
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.fillText(sector.name, lx, ly);
-    
+
       // ---- slice divider (radar line) ----
       // Splits each sector into two slices by drawing a radial line aimed at the sector mid-angle,
       // clipped to the hexagon side segment A-B.
       const cross = (u, v) => u.x * v.y - u.y * v.x;
-    
+
       // canvas ray direction for angle ma (note: canvas y grows downward)
-      const r = { x: Math.cos(ma), y: -Math.sin(ma) }; // ray from center
-      const s = { x: (B.x - A.x), y: (B.y - A.y) };    // segment A->B
+      const rdir = { x: Math.cos(ma), y: -Math.sin(ma) }; // ray from center
+      const sdir = { x: (B.x - A.x), y: (B.y - A.y) };    // segment A->B
       const AC = { x: (A.x - cx), y: (A.y - cy) };
-    
-      const denom = cross(r, s);
+
+      const denom = cross(rdir, sdir);
       if (Math.abs(denom) > 1e-9) {
-        const t = cross(AC, s) / denom; // along ray
-        const u = cross(AC, r) / denom; // along segment
-    
+        const t = cross(AC, sdir) / denom; // along ray
+        const u = cross(AC, rdir) / denom; // along segment
+
         if (t > 0 && u >= 0 && u <= 1) {
-          const ix = cx + r.x * t;
-          const iy = cy + r.y * t;
-    
+          const ix = cx + rdir.x * t;
+          const iy = cy + rdir.y * t;
+
           ctx.save();
           ctx.beginPath();
           ctx.moveTo(cx, cy);
           ctx.lineTo(ix, iy);
-          // ctx.setLineDash([6, 6]); // optional: dashed look. Remove for solid.
+          // ctx.setLineDash([6, 6]); // optional dashed
           ctx.strokeStyle = "rgba(255,255,255,.14)";
           ctx.lineWidth = 1;
           ctx.stroke();
@@ -884,7 +884,6 @@
         }
       }
     }
-
 
     // outer hexagon outline (corners are poles)
     ctx.beginPath();
@@ -932,12 +931,10 @@
       ctx.stroke();
 
       // label near the corner (slightly above/outside)
-      const labelR =
-      (p.key === "THIRD" || p.key === "CENTRIST") ? (R * 1.08) : (R * 1.18);
-
+      const labelR = (p.key === "THIRD" || p.key === "CENTRIST") ? (R * 1.08) : (R * 1.18);
       const lx = cx + Math.cos(a) * labelR;
       const ly = cy - Math.sin(a) * labelR;
-      
+
       ctx.font = "12px system-ui";
       ctx.fillStyle = "rgba(233,238,252,.86)";
       ctx.textAlign = "center";
@@ -1008,8 +1005,7 @@
             <canvas id="c_preview" width="520" height="520"></canvas>
           </div>
           <div class="spacer"></div>
-          <div class="smallnote muted">
-          </div>
+          <div class="smallnote muted"></div>
         </div>
       </div>
     `;
@@ -1973,7 +1969,7 @@
       <div class="grid cols2">
         <div class="card">
           <h2>Questions</h2>
-          <div class="smallnote muted">Add/disable questions. Each question pushes toward a <b>filter (colour sector)</b>.</div>
+          <div class="smallnote muted">Add/disable/delete questions. Each question pushes toward a <b>filter (colour sector)</b>.</div>
           <div class="hr"></div>
 
           <label>Question text</label>
@@ -1998,7 +1994,6 @@
 
           <div class="row">
             <button id="q_add" class="btn good" type="button">Add question</button>
-            <button id="q_seed" class="btn warn" type="button">Seed sample questions</button>
             <button id="q_refresh" class="btn" type="button">Refresh list</button>
           </div>
 
@@ -2086,6 +2081,9 @@
                 <button class="btn small ${en?'danger':'good'}" data-qtoggle="${q.id}" type="button">
                   ${en ? "Disable" : "Enable"}
                 </button>
+                <button class="btn small danger" data-qdelete="${q.id}" type="button">
+                  Delete
+                </button>
               </div>
             </div>
           </div>
@@ -2104,6 +2102,25 @@
             await refreshQuestionList();
           }catch(e){
             toast("Failed: " + (e?.message || e));
+          }
+        };
+      });
+
+      $list.querySelectorAll("[data-qdelete]").forEach(btn=>{
+        btn.onclick = async ()=>{
+          const id = btn.getAttribute("data-qdelete");
+          const cur = out.find(x=>x.id===id);
+          if(!cur) return;
+
+          if(!confirm("Delete this question permanently?")) return;
+
+          try{
+            await deleteDoc(doc(db,"questions", id));
+            toast("Deleted.");
+            await loadQuestions();
+            await refreshQuestionList();
+          }catch(e){
+            toast("Delete failed: " + (e?.message || e));
           }
         };
       });
@@ -2136,33 +2153,6 @@
         await refreshQuestionList();
       }catch(e){
         toast("Failed: " + (e?.message || e));
-      }
-    };
-
-    document.getElementById("q_seed").onclick = async ()=>{
-      const samples = [
-        { text:"A strong national identity is important for social cohesion.", direction:"BLUE", weight:1.0, tags:["nationalism","identity"] },
-        { text:"Economic inequality is one of the biggest sources of social instability.", direction:"GREEN", weight:1.0, tags:["economy","inequality"] },
-        { text:"Tradition should be preserved even when it conflicts with modern social trends.", direction:"BROWN", weight:1.0, tags:["tradition","culture"] },
-        { text:"Markets should be regulated when they produce major harms.", direction:"RED", weight:1.0, tags:["economy","regulation"] },
-        { text:"Individual liberties should generally be prioritized over state control.", direction:"PURPLE", weight:1.0, tags:["liberty","state"] },
-        { text:"A nation should be economically self-sufficient where possible.", direction:"REDBROWN", weight:1.0, tags:["economy","nationalism"] },
-      ];
-
-      try{
-        for(const s of samples){
-          await addDoc(collection(db,"questions"), {
-            ...s,
-            enabled: true,
-            createdBy: state.user.uid,
-            createdAt: serverTimestamp()
-          });
-        }
-        toast("Seeded sample questions.");
-        await loadQuestions();
-        await refreshQuestionList();
-      }catch(e){
-        toast("Seed failed: " + (e?.message || e));
       }
     };
 
@@ -2233,9 +2223,3 @@
 </script>
 </body>
 </html>
-
-
-
-
-
-
