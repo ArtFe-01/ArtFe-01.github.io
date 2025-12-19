@@ -1,0 +1,75 @@
+// Firestore Security Rules for Hexa-Political Compass
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isAnon() {
+      return signedIn() && request.auth.token.firebase.sign_in_provider == "anonymous";
+    }
+
+    function isAdmin() {
+      return signedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    // Questions: public read for enabled, admin can write
+    match /questions/{qid} {
+      allow read: if resource.data.enabled == true || isAdmin();
+      allow create, update, delete: if isAdmin();
+    }
+
+    // Scoring settings: admin only write
+    match /settings/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // User profiles: only owner (non-essential for guests)
+    match /users/{uid} {
+      allow read, write: if signedIn() && request.auth.uid == uid;
+    }
+
+    // Attempts:
+    // - Any signed-in user (including anonymous) can create attempts for themselves.
+    // - Public attempts readable by anyone; private readable only by owner.
+    // - Owner can only toggle 'public' (attempt immutability).
+    match /attempts/{aid} {
+      allow create: if signedIn() && request.resource.data.uid == request.auth.uid;
+      allow read: if resource.data.public == true || (signedIn() && resource.data.uid == request.auth.uid);
+      allow update: if signedIn() && resource.data.uid == request.auth.uid
+                    && request.resource.data.diff(resource.data).changedKeys().hasOnly(['public']);
+      allow delete: if false;
+    }
+
+    // Suggestions:
+    // - Read is public.
+    // - Create/vote requires non-anonymous account (anti-spam).
+    // - Admin can manage status and delete.
+    match /suggestions/{sid} {
+      allow read: if true;
+
+      allow create: if signedIn() && !isAnon();
+
+      allow update: if isAdmin()
+                    || (signedIn() && !isAnon()
+                        && request.auth.uid == resource.data.createdBy
+                        && request.resource.data.diff(resource.data).changedKeys().hasOnly(['text','direction','weight','tags']));
+
+      allow delete: if isAdmin();
+
+      match /votes/{uid} {
+        allow read: if signedIn() && !isAnon();
+        allow create, update, delete: if signedIn() && !isAnon() && request.auth.uid == uid;
+      }
+    }
+
+    // Admin registry: only admins manage admins
+    match /admins/{uid} {
+      allow read: if isAdmin();
+      allow write: if isAdmin();
+    }
+  }
+}
