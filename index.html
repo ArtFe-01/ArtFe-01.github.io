@@ -32,10 +32,7 @@
       border-bottom:1px solid var(--line);
     }
     .wrap{max-width:1150px; margin:0 auto; padding:16px}
-    .nav{
-      display:flex; align-items:center; gap:12px; flex-wrap:wrap;
-      justify-content:space-between;
-    }
+    .nav{display:flex; align-items:center; gap:12px; flex-wrap:wrap; justify-content:space-between;}
     .brand{display:flex; align-items:center; gap:10px}
     .logo{
       width:34px; height:34px; border-radius:10px;
@@ -108,25 +105,13 @@
     }
     textarea{min-height:90px; resize:vertical}
     label{font-size:12px; color:var(--muted)}
-    .kpi{
-      display:grid; grid-template-columns:1fr 1fr; gap:10px;
-    }
-    .kpi .box{
-      border:1px solid var(--line2);
-      background:rgba(255,255,255,.02);
-      border-radius:14px;
-      padding:10px;
-    }
+    .kpi{display:grid; grid-template-columns:1fr 1fr; gap:10px;}
+    .kpi .box{border:1px solid var(--line2); background:rgba(255,255,255,.02); border-radius:14px; padding:10px;}
     .kpi .box .t{font-size:11px; color:var(--muted)}
     .kpi .box .v{font-size:16px; margin-top:6px}
     .hr{border-top:1px solid var(--line2); margin:12px 0}
     .list{display:flex; flex-direction:column; gap:10px}
-    .item{
-      border:1px solid var(--line2);
-      background:rgba(255,255,255,.02);
-      border-radius:14px;
-      padding:10px;
-    }
+    .item{border:1px solid var(--line2); background:rgba(255,255,255,.02); border-radius:14px; padding:10px;}
     .item .top{display:flex; align-items:flex-start; justify-content:space-between; gap:10px}
     .item .title{font-size:13px; margin:0}
     .item .meta{font-size:12px; color:var(--muted)}
@@ -147,9 +132,7 @@
       border:1px solid var(--line2);
       background:rgba(255,255,255,.02);
     }
-    .table th,.table td{
-      padding:10px 10px; font-size:12px; border-bottom:1px solid var(--line2); vertical-align:top;
-    }
+    .table th,.table td{padding:10px 10px; font-size:12px; border-bottom:1px solid var(--line2); vertical-align:top;}
     .table th{color:var(--muted); font-weight:600; text-align:left; background:rgba(255,255,255,.02)}
     .table tr:last-child td{border-bottom:none}
     .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace}
@@ -165,18 +148,10 @@
       display:none;
       max-width:min(92vw, 700px);
     }
-    .split{
-      display:grid; gap:14px;
-    }
-    @media(min-width:980px){
-      .split{grid-template-columns:1fr 1fr}
-    }
+    .split{display:grid; gap:14px;}
+    @media(min-width:980px){ .split{grid-template-columns:1fr 1fr} }
     .chips{display:flex; flex-wrap:wrap; gap:6px}
-    .chip{
-      font-size:11px; padding:4px 8px; border-radius:999px;
-      border:1px solid var(--line2);
-      background:rgba(255,255,255,.02); color:var(--muted);
-    }
+    .chip{font-size:11px; padding:4px 8px; border-radius:999px; border:1px solid var(--line2); background:rgba(255,255,255,.02); color:var(--muted);}
     .dangerText{color:#ff9aaa}
     .goodText{color:#b7ffd8}
     .warnText{color:#ffe0a8}
@@ -205,8 +180,8 @@
       </div>
 
       <div class="rightMeta">
-        <span id="userTag" class="userTag">Not signed in</span>
-        <button id="authBtn" class="pill good" type="button">Sign in</button>
+        <span id="userTag" class="userTag">Connecting…</span>
+        <button id="authBtn" class="pill good" type="button">Sign in / Upgrade</button>
         <button id="signOutBtn" class="pill danger" type="button" style="display:none;">Sign out</button>
       </div>
     </div>
@@ -222,22 +197,17 @@
 <div id="toast" class="toast"></div>
 
 <script type="module">
-  // Hexa-Political Compass — GitHub Pages + Firebase (Auth + Firestore)
-  // IMPORTANT:
-  // 1) Replace firebaseConfig below.
-  // 2) Add your GitHub Pages domain to Firebase Auth "Authorized domains".
-  // 3) Set Firestore Security Rules (see firestore.rules provided separately).
-
   import { initializeApp } from "https://www.gstatic.com/firebasejs/12.7.0/firebase-app.js";
   import {
     getAuth, onAuthStateChanged,
-    signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, updateProfile
+    signInWithEmailAndPassword, createUserWithEmailAndPassword,
+    signOut, updateProfile, signInAnonymously,
+    EmailAuthProvider, linkWithCredential
   } from "https://www.gstatic.com/firebasejs/12.7.0/firebase-auth.js";
   import {
     getFirestore, doc, getDoc, setDoc, updateDoc, addDoc,
     collection, query, where, orderBy, limit, getDocs,
-    serverTimestamp, Timestamp,
-    runTransaction, increment
+    serverTimestamp, runTransaction, increment
   } from "https://www.gstatic.com/firebasejs/12.7.0/firebase-firestore.js";
 
   // ---- Firebase config (REPLACE THIS) ----
@@ -264,7 +234,6 @@
   const GREY = { key: "GREY", name:"Grey (Center)", color:getCSS("--grey") };
 
   const CATEGORY_ARCS = [
-    // Adjacent pair categories (matching your draft)
     { a:"BROWN",    b:"BLUE",     label:"Reactionary Politics" },
     { a:"BLUE",     b:"PURPLE",   label:"Right-wing Politics" },
     { a:"PURPLE",   b:"GREEN",    label:"Centrist Politics" },
@@ -273,9 +242,7 @@
     { a:"REDBROWN", b:"BROWN",    label:"Third-Position Politics" },
   ];
 
-  function getCSS(varName){
-    return getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
-  }
+  function getCSS(varName){ return getComputedStyle(document.documentElement).getPropertyValue(varName).trim(); }
   function rad(deg){ return deg * Math.PI / 180; }
   function clamp(x,a,b){ return Math.max(a, Math.min(b, x)); }
 
@@ -305,12 +272,12 @@
     ],
     synergy: {
       enabled: true,
-      neutralStrength: 0.35,    // how strongly "Neutral" gets inferred from tag-consistency
-      ambivalentStrength: 0.20, // how strongly "Ambivalent" gets inferred
-      threshold: 0.25,          // tag stance abs(value) needed before inference applies
+      neutralStrength: 0.35,
+      ambivalentStrength: 0.20,
+      threshold: 0.25,
     },
-    centerRadius: 0.12,          // within this => Grey center
-    pureCornerRadius: 0.82,      // beyond this => "Pure" lean
+    centerRadius: 0.12,
+    pureCornerRadius: 0.82,
   };
 
   const state = {
@@ -319,6 +286,7 @@
     settings: structuredClone(DEFAULT_SETTINGS),
     questions: [],
     lastAttempt: null,
+    authReady: false,
   };
 
   // ---- UI helpers ----
@@ -356,16 +324,25 @@
     const q = new URLSearchParams(queryPart || "");
     return { parts, q, raw };
   }
-
   function navTo(hash){ location.hash = hash; }
 
-  // ---- Auth modal ----
+  function isGuest(){
+    return !!(state.user && state.user.isAnonymous);
+  }
+
+  // ---- Auth modal (upgrade guest OR sign in/register) ----
   function showAuthModal(){
+    const guestNote = isGuest()
+      ? `<span class="badge warn">You are currently browsing as Guest</span>
+         <div class="spacer"></div>
+         <div class="smallnote muted">Upgrading links your Guest data (attempts under this UID) to an email/password account.</div>`
+      : `<div class="smallnote muted">If you don’t want an account, ignore this — Guest mode already works.</div>`;
+
     $app.innerHTML = `
       <div class="grid cols2">
         <div class="card">
           <h2>Sign in</h2>
-          <div class="smallnote">Email/password authentication (Firebase Auth). Add your GitHub Pages domain as an authorized domain in Firebase Auth settings.</div>
+          ${guestNote}
           <div class="spacer"></div>
 
           <label>Email</label>
@@ -376,12 +353,16 @@
           <div class="spacer"></div>
           <button id="si_btn" class="btn good" type="button">Sign in</button>
           <button class="btn" type="button" onclick="location.hash='#/'">Cancel</button>
+
           <div class="spacer"></div>
-          <div class="smallnote muted">If you forget your password, use Firebase console to enable password reset emails (optional).</div>
+          <div class="smallnote muted">
+            Note: signing into an existing account will switch away from the current Guest user.
+            If you want to keep Guest attempts, use “Register / Upgrade” instead.
+          </div>
         </div>
 
         <div class="card">
-          <h2>Create account</h2>
+          <h2>${isGuest() ? "Register / Upgrade Guest" : "Create account"}</h2>
           <label>Display name</label>
           <input id="su_name" type="text" placeholder="Arthur" autocomplete="name" />
           <div class="spacer"></div>
@@ -391,9 +372,11 @@
           <label>Password</label>
           <input id="su_pass" type="password" placeholder="At least 6 characters" autocomplete="new-password" />
           <div class="spacer"></div>
-          <button id="su_btn" class="btn primary" type="button">Register</button>
+          <button id="su_btn" class="btn primary" type="button">${isGuest() ? "Upgrade" : "Register"}</button>
           <div class="spacer"></div>
-          <div class="smallnote muted">After registering, an admin can grant admin status by creating a Firestore document: <span class="mono">admins/&lt;uid&gt;</span>.</div>
+          <div class="smallnote muted">
+            Admin can grant admin status by creating a Firestore doc: <span class="mono">admins/&lt;uid&gt;</span>.
+          </div>
         </div>
       </div>
     `;
@@ -416,28 +399,49 @@
       const email = document.getElementById("su_email").value.trim();
       const pass = document.getElementById("su_pass").value;
       if(!email || !pass) return toast("Email + password required.");
+
       try{
-        const cred = await createUserWithEmailAndPassword(auth, email, pass);
-        if(name){
-          await updateProfile(cred.user, { displayName: name });
+        if(isGuest()){
+          // Upgrade guest by linking credential to current anonymous user
+          const cred = EmailAuthProvider.credential(email, pass);
+          const linked = await linkWithCredential(auth.currentUser, cred);
+          if(name) await updateProfile(linked.user, { displayName: name });
+          await setDoc(doc(db, "users", linked.user.uid), {
+            displayName: name || "",
+            email,
+            upgradedAt: serverTimestamp(),
+            createdAt: serverTimestamp(),
+          }, { merge:true });
+          toast("Guest upgraded.");
+        } else {
+          // Normal register
+          const created = await createUserWithEmailAndPassword(auth, email, pass);
+          if(name) await updateProfile(created.user, { displayName: name });
+          await setDoc(doc(db, "users", created.user.uid), {
+            displayName: name || "",
+            email,
+            createdAt: serverTimestamp(),
+          }, { merge:true });
+          toast("Account created.");
         }
-        await setDoc(doc(db, "users", cred.user.uid), {
-          displayName: name || "",
-          email,
-          createdAt: serverTimestamp(),
-        }, { merge:true });
-        toast("Account created.");
         navTo("#/");
       }catch(e){
-        toast("Register failed: " + (e?.message || e));
+        toast("Register/upgrade failed: " + (e?.message || e));
       }
     };
   }
 
   $authBtn.onclick = ()=> navTo("#/login");
+
   $signOutBtn.onclick = async ()=>{
-    try{ await signOut(auth); toast("Signed out."); navTo("#/"); }
-    catch(e){ toast("Sign out failed: " + (e?.message || e)); }
+    try{
+      await signOut(auth);
+      toast("Signed out (switching back to Guest).");
+      // onAuthStateChanged will automatically re-enter guest mode (anonymous sign-in)
+      navTo("#/");
+    }catch(e){
+      toast("Sign out failed: " + (e?.message || e));
+    }
   };
 
   // ---- Firestore helpers ----
@@ -446,13 +450,11 @@
       const snap = await getDoc(doc(db, "settings", "scoring"));
       if(snap.exists()){
         const data = snap.data();
-        // merge shallowly, but keep defaults for missing keys
         state.settings = deepMerge(structuredClone(DEFAULT_SETTINGS), data);
       }else{
         state.settings = structuredClone(DEFAULT_SETTINGS);
       }
-    }catch(e){
-      // fail closed to defaults
+    }catch{
       state.settings = structuredClone(DEFAULT_SETTINGS);
     }
   }
@@ -468,8 +470,7 @@
       );
       const snap = await getDocs(qref);
       snap.forEach(d=> qs.push({ id:d.id, ...d.data() }));
-    }catch(e){
-      // if no index yet, try a simpler fetch
+    }catch{
       try{
         const snap = await getDocs(collection(db, "questions"));
         snap.forEach(d=>{
@@ -487,14 +488,14 @@
     try{
       const snap = await getDoc(doc(db, "admins", uid));
       return snap.exists();
-    }catch(e){
+    }catch{
       return false;
     }
   }
 
   function deepMerge(base, patch){
     if(patch == null) return base;
-    if(Array.isArray(base) && Array.isArray(patch)) return patch; // admin fully controls arrays
+    if(Array.isArray(base) && Array.isArray(patch)) return patch;
     if(typeof base !== "object" || typeof patch !== "object") return patch;
     const out = Array.isArray(base) ? [...base] : { ...base };
     for(const k of Object.keys(patch)){
@@ -510,11 +511,7 @@
     const a = rad(s.angleDeg);
     return { x: Math.cos(a), y: Math.sin(a), angleDeg: s.angleDeg };
   }
-
-  function getAnswerDef(key){
-    return state.settings.answerScale.find(a=>a.key===key) || null;
-  }
-
+  function getAnswerDef(key){ return state.settings.answerScale.find(a=>a.key===key) || null; }
   function getImportanceDef(n){
     return state.settings.importanceScale.find(i=>Number(i.key)===Number(n)) || state.settings.importanceScale[2];
   }
@@ -522,120 +519,38 @@
   function classifyPoint(x,y){
     const r = Math.hypot(x,y);
     if(r <= state.settings.centerRadius){
-      return {
-        sectorKey: GREY.key,
-        sectorName: GREY.name,
-        category: "Grey Center (Liminal)",
-        radicalism: 0,
-        angleDeg: 0,
-        label: "Grey (Center)"
-      };
+      return { sectorKey: GREY.key, sectorName: GREY.name, category:"Grey Center (Liminal)", radicalism:0, angleDeg:0, label:"Grey (Center)" };
     }
-
-    const angle = Math.atan2(y,x); // radians
+    const angle = Math.atan2(y,x);
     let deg = angle * 180/Math.PI;
     if(deg < -180) deg += 360;
     if(deg > 180) deg -= 360;
 
-    // Find nearest sector by angular distance
     const distAng = (a,b)=>{
       let d = Math.abs(a-b);
       while(d>180) d = Math.abs(d-360);
       return d;
     };
-    const nearest = SECTORS
-      .map(s=>({ s, d: distAng(deg, s.angleDeg) }))
-      .sort((p,q)=>p.d-q.d)[0].s;
-
-    // Determine which adjacent arc the point lies in
+    const nearest = SECTORS.map(s=>({ s, d: distAng(deg, s.angleDeg) })).sort((p,q)=>p.d-q.d)[0].s;
     const arc = findArc(deg);
-
     const radicalism = clamp(r,0,1);
     const pure = (r >= state.settings.pureCornerRadius);
 
-    let label = pure ? `Pure ${nearest.name}` : `Mixed ${arc.label.replace(" Politics","")}`;
-    // Keep your mono/mixed language explicit
-    if(pure) label = `Pure Mono-Politics: ${nearest.name}`;
-    else label = `Composite/Mixed: ${arc.label}`;
-
-    return {
-      sectorKey: nearest.key,
-      sectorName: nearest.name,
-      category: arc.label,
-      radicalism,
-      angleDeg: deg,
-      label
-    };
+    let label = pure ? `Pure Mono-Politics: ${nearest.name}` : `Composite/Mixed: ${arc.label}`;
+    return { sectorKey: nearest.key, sectorName: nearest.name, category: arc.label, radicalism, angleDeg: deg, label };
   }
 
   function findArc(deg){
-    // sector angles in clockwise order:
-    // Brown 90 -> Blue 30 -> Purple -30 -> Green -90 -> Red -150 -> RedBrown 150 -> back to Brown 90
-    // We'll map angle to the interval between two adjacent sector angles.
     const order = ["BROWN","BLUE","PURPLE","GREEN","RED","REDBROWN"];
     const ang = key => SECTORS.find(s=>s.key===key).angleDeg;
-
-    // normalize angle to [-180,180], but handle wrap between 150 and 90 (through 180/-180)
-    // We'll pick arc by checking which two consecutive angles bound the point along clockwise direction.
-    // Convert to [0,360) for stable comparisons.
     const to360 = d => (d<0 ? d+360 : d);
     const A = to360(deg);
 
-    const pairs = [
-      ["BROWN","BLUE"],
-      ["BLUE","PURPLE"],
-      ["PURPLE","GREEN"],
-      ["GREEN","RED"],
-      ["RED","REDBROWN"],
-      ["REDBROWN","BROWN"],
-    ].map(([a,b])=>{
-      const a360 = to360(ang(a));
-      const b360 = to360(ang(b));
-      // clockwise from a to b (decreasing in your angles), but on 0..360 we can treat ranges with wrap.
-      // We'll compute shortest clockwise range from a to b by stepping through our fixed order.
-      return { a,b, a360, b360 };
-    });
-
-    // Build actual ranges by following the known order around the circle in 60° steps.
-    // The boundaries are midpoints between sector angles.
-    // Compute midpoints:
-    const mids = [];
-    for(let i=0;i<order.length;i++){
-      const k1 = order[i];
-      const k2 = order[(i+1)%order.length];
-      const d1 = to360(ang(k1));
-      const d2 = to360(ang(k2));
-      // midpoint along circular direction from d1 to d2 by the shorter path (they're 60° apart)
-      let m = (d1 + d2)/2;
-      // handle wrap around 360/0
-      if(Math.abs(d1-d2) > 180){
-        m = ( (d1 + d2 + 360) / 2 ) % 360;
-      }
-      mids.push({ between:[k1,k2], mid:m });
-    }
-
-    // Determine which sector wedge (between midpoints) contains A, then map to adjacent pair category.
-    // Wedge i is from mids[i-1] to mids[i] around the circle, containing sector order[i].
-    const midVals = mids.map(x=>x.mid);
-    // sort midpoints around circle
-    const sorted = [...midVals].sort((a,b)=>a-b);
-
-    // Find which interval contains A
-    let idx = sorted.findIndex((v,i)=>{
-      const next = sorted[(i+1)%sorted.length];
-      if(i === sorted.length-1){
-        return (A >= v) || (A < next);
-      }
-      return (A >= v && A < next);
-    });
-    if(idx < 0) idx = 0;
-
-    // Interval [sorted[idx], sorted[idx+1]) contains a sector; map it by nearest sector:
+    // nearest sector (stable)
     const nearest = SECTORS
       .map(s=>({ s, d: Math.min(Math.abs(to360(s.angleDeg)-A), 360-Math.abs(to360(s.angleDeg)-A)) }))
       .sort((p,q)=>p.d-q.d)[0].s;
 
-    // Arc category is between nearest and its next clockwise neighbor
     const pos = order.indexOf(nearest.key);
     const next = order[(pos+1)%order.length];
     const a = nearest.key;
@@ -645,16 +560,12 @@
   }
 
   function computeScore(questions, answers){
-    // answers: { [qid]: { choiceKey, importanceKey } }
     const breakdown = [];
     const synergyNotes = [];
-
-    // First pass: raw contributions + build per-tag stance from non-neutral answers
     let rawX = 0, rawY = 0;
     let maxSum = 0;
 
-    const tagAgg = new Map(); // tag -> {sum, wsum}
-    const getQ = (qid)=> questions.find(q=>q.id===qid);
+    const tagAgg = new Map();
 
     for(const q of questions){
       const a = answers[q.id];
@@ -666,7 +577,7 @@
       const weight = Number(q.weight ?? 1);
       const w = weight * Number(impDef.mult ?? 1);
 
-      maxSum += Math.abs(w) * 1; // max abs answer is 1
+      maxSum += Math.abs(w) * 1;
 
       const vec = sectorVec(q.direction);
       const baseValue = Number(ansDef.value ?? 0);
@@ -676,7 +587,6 @@
       rawX += cx;
       rawY += cy;
 
-      // build tag stance only from non-neutral (value !=0) answers
       if(Math.abs(baseValue) > 1e-9 && Array.isArray(q.tags)){
         for(const t of q.tags){
           if(!t) continue;
@@ -707,16 +617,15 @@
       });
     }
 
-    // Second pass (Synergy): infer stance for Neutral/Ambivalent based on tag consistency
+    // Synergy inference
     if(state.settings.synergy?.enabled){
       for(const row of breakdown){
-        const q = getQ(row.qid);
+        const q = questions.find(qq=>qq.id===row.qid);
         const ansDef = getAnswerDef(row.choiceKey);
         const special = ansDef?.special || null;
         if(!(special === "neutral" || special === "ambivalent")) continue;
         if(!q?.tags?.length) continue;
 
-        // compute average tag stance across the question's tags
         let sum = 0, cnt = 0;
         for(const t of q.tags){
           const key = String(t).toLowerCase().trim();
@@ -734,7 +643,7 @@
           ? Number(state.settings.synergy.neutralStrength ?? 0.35)
           : Number(state.settings.synergy.ambivalentStrength ?? 0.20);
 
-        const inferred = tagStance * strength; // small inferred nudge
+        const inferred = tagStance * strength;
         const qVec = sectorVec(row.direction);
         const dx = qVec.x * inferred * row.w;
         const dy = qVec.y * inferred * row.w;
@@ -752,32 +661,30 @@
       }
     }
 
-    // Normalize into [-1,1] range
     if(maxSum < 1e-9) maxSum = 1;
     let x = rawX / maxSum;
     let y = rawY / maxSum;
 
-    // clamp to unit circle
     const r = Math.hypot(x,y);
-    if(r > 1){
-      x /= r; y /= r;
-    }
+    if(r > 1){ x /= r; y /= r; }
 
     const cls = classifyPoint(x,y);
-
-    return {
-      x, y,
-      r: Math.hypot(x,y),
-      classification: cls,
-      breakdown,
-      synergyNotes,
-      maxSum
-    };
+    return { x, y, r: Math.hypot(x,y), classification: cls, breakdown, synergyNotes, maxSum };
   }
 
   // ---- Canvas drawing ----
+  function hexToRgba(hex, a){
+    const h = (hex||"").trim();
+    if(h.startsWith("#") && (h.length===7)){
+      const r = parseInt(h.slice(1,3),16);
+      const g = parseInt(h.slice(3,5),16);
+      const b = parseInt(h.slice(5,7),16);
+      return `rgba(${r},${g},${b},${a})`;
+    }
+    return `rgba(255,255,255,${a})`;
+  }
+
   function drawCompass(canvas, points){
-    // points: [{x,y,label,color}]
     const ctx = canvas.getContext("2d");
     const W = canvas.width, H = canvas.height;
     ctx.clearRect(0,0,W,H);
@@ -785,17 +692,11 @@
     const cx = W/2, cy = H/2;
     const R = Math.min(W,H) * 0.42;
 
-    // background
-    ctx.fillStyle = "rgba(0,0,0,0)";
-    ctx.fillRect(0,0,W,H);
-
-    // hex vertices
     const verts = SECTORS.map(s=>{
       const a = rad(s.angleDeg);
-      return { x: cx + Math.cos(a)*R, y: cy - Math.sin(a)*R }; // invert y for canvas
+      return { x: cx + Math.cos(a)*R, y: cy - Math.sin(a)*R };
     });
 
-    // fill sectors (triangles)
     for(let i=0;i<SECTORS.length;i++){
       const s = SECTORS[i];
       const v1 = verts[i];
@@ -811,7 +712,6 @@
       ctx.stroke();
     }
 
-    // grey center
     ctx.beginPath();
     ctx.arc(cx,cy, R*state.settings.centerRadius, 0, Math.PI*2);
     ctx.fillStyle = hexToRgba(GREY.color, 0.28);
@@ -819,7 +719,6 @@
     ctx.strokeStyle = "rgba(255,255,255,.10)";
     ctx.stroke();
 
-    // rings
     for(const k of [0.25, 0.5, 0.75, 1.0]){
       ctx.beginPath();
       ctx.arc(cx,cy, R*k, 0, Math.PI*2);
@@ -827,7 +726,6 @@
       ctx.stroke();
     }
 
-    // labels
     ctx.font = "12px system-ui";
     ctx.fillStyle = "rgba(233,238,252,.8)";
     ctx.textAlign = "center";
@@ -842,7 +740,6 @@
     ctx.fillStyle = "rgba(233,238,252,.7)";
     ctx.fillText("Grey", cx, cy);
 
-    // plot points
     for(const p of points || []){
       const px = cx + p.x * R;
       const py = cy - p.y * R;
@@ -863,22 +760,8 @@
     }
   }
 
-  function hexToRgba(hex, a){
-    // accepts CSS named colors too; try parse #rrggbb
-    const h = (hex||"").trim();
-    if(h.startsWith("#") && (h.length===7)){
-      const r = parseInt(h.slice(1,3),16);
-      const g = parseInt(h.slice(3,5),16);
-      const b = parseInt(h.slice(5,7),16);
-      return `rgba(${r},${g},${b},${a})`;
-    }
-    // fallback: just use it with global alpha-ish
-    return `rgba(255,255,255,${a})`;
-  }
-
   // ---- Pages ----
   function renderHome(){
-    const u = state.user;
     $app.innerHTML = `
       <div class="grid cols2">
         <div class="card">
@@ -888,7 +771,7 @@
             Your position is computed as a weighted vector sum of your answers.
             <div class="spacer"></div>
             <span class="badge primary">Composite/Mixed</span> means you’re between adjacent regions (your “arc category”).
-            <span class="badge warn">Radicalism</span> is how far you are from the center (authority axis is intentionally *implicit* by distance).
+            <span class="badge warn">Radicalism</span> is how far you are from the center (authority axis is intentionally implicit by distance).
           </div>
           <div class="hr"></div>
           <div class="row">
@@ -898,7 +781,8 @@
           </div>
           <div class="spacer"></div>
           <div class="smallnote muted">
-            Practical note: because this is a static GitHub Pages site, security depends on Firestore Security Rules (not “hiding” code).
+            Guest mode is automatic (anonymous auth). You don’t need an account to take the test, save attempts, share, or compare.
+            Suggestions/voting can be restricted to non-guest accounts (configurable via rules).
           </div>
         </div>
 
@@ -909,33 +793,18 @@
           </div>
           <div class="spacer"></div>
           <div class="smallnote muted">
-            Tip: Share a result via a public “share link”, then compare multiple attempts (yours or friends’) on one compass.
+            Tip: Make an attempt public to get a share link, then compare multiple attempts on one compass.
           </div>
         </div>
       </div>
     `;
-
-    const c = document.getElementById("c_preview");
-    drawCompass(c, [
+    drawCompass(document.getElementById("c_preview"), [
       { x:0.00, y:0.00, label:"Center", color:"rgba(107,114,128,.95)" },
       { x:0.62, y:0.18, label:"Example", color:"rgba(124,156,255,.95)" },
     ]);
   }
 
   function renderQuiz(){
-    if(!state.user){
-      $app.innerHTML = `
-        <div class="card">
-          <h2>Sign in required</h2>
-          <div class="smallnote muted">To save attempts, keep a ledger, and vote on suggestions, you must sign in.</div>
-          <div class="spacer"></div>
-          <button class="btn good" type="button" id="goLogin">Sign in</button>
-        </div>
-      `;
-      document.getElementById("goLogin").onclick = ()=> navTo("#/login");
-      return;
-    }
-
     const qs = state.questions;
     if(!qs.length){
       $app.innerHTML = `
@@ -947,11 +816,8 @@
       return;
     }
 
-    // local working answers (not saved until submit)
     const key = "hpc_draft_answers_v1";
-    const saved = safeJsonParse(localStorage.getItem(key)) || {};
-    const answers = saved;
-
+    const answers = safeJsonParse(localStorage.getItem(key)) || {};
     const answerOptions = state.settings.answerScale;
     const impOptions = state.settings.importanceScale;
 
@@ -959,7 +825,9 @@
       <div class="grid cols2">
         <div class="card">
           <h2>Test</h2>
-          <div class="smallnote muted">Answer every question (Neutral / Ambivalent / N/A allowed). Set importance per question. Then submit to compute + store attempt.</div>
+          <div class="smallnote muted">
+            Guest mode is fine — no account required. Your attempt will be saved under your current Guest UID (or your account UID).
+          </div>
           <div class="hr"></div>
 
           <div class="row">
@@ -976,7 +844,7 @@
           </div>
           <div class="spacer"></div>
           <div class="smallnote muted">
-            Transparency: your ledger stores every question, your answer, your importance weight, and each coordinate contribution.
+            Transparency: the ledger stores every question, your answer, your importance weight, and each coordinate contribution.
           </div>
         </div>
 
@@ -1007,7 +875,7 @@
 
           <div class="hr"></div>
           <div class="smallnote muted">
-            “Synergy” will only apply on submit: it nudges Neutral/Ambivalent answers based on your tag-consistent non-neutral answers.
+            “Synergy” applies on submit: it nudges Neutral/Ambivalent answers based on tag-consistent non-neutral answers.
           </div>
         </div>
       </div>
@@ -1040,9 +908,7 @@
                 <label>Answer</label>
                 <select data-qid="${q.id}" data-field="choiceKey">
                   ${answerOptions.map(opt=>`
-                    <option value="${opt.key}" ${opt.key===a.choiceKey ? "selected":""}>
-                      ${htmlEscape(opt.label)}
-                    </option>
+                    <option value="${opt.key}" ${opt.key===a.choiceKey ? "selected":""}>${htmlEscape(opt.label)}</option>
                   `).join("")}
                 </select>
               </div>
@@ -1067,7 +933,6 @@
           const field = sel.getAttribute("data-field");
           answers[qid] = answers[qid] || { choiceKey:"N", importanceKey:3 };
           answers[qid][field] = (field === "importanceKey") ? Number(sel.value) : sel.value;
-          // live preview uses NO synergy (only direct answers)
           const preview = computeScore(qs, answers);
           updateLive(preview);
           localStorage.setItem(key, JSON.stringify(answers));
@@ -1080,9 +945,7 @@
       document.getElementById("kpi_y").textContent = res.y.toFixed(3);
       document.getElementById("kpi_r").textContent = res.r.toFixed(3);
       document.getElementById("kpi_label").textContent = res.classification.label;
-      drawCompass(c, [
-        { x: res.x, y: res.y, label:"You", color:"rgba(124,156,255,.95)" }
-      ]);
+      drawCompass(c, [{ x: res.x, y: res.y, label:"You", color:"rgba(124,156,255,.95)" }]);
     }
 
     document.getElementById("saveDraft").onclick = ()=>{
@@ -1099,9 +962,12 @@
     };
 
     document.getElementById("submitAttempt").onclick = async ()=>{
-      // require at least something answered (draft can be empty)
       if(Object.keys(answers).length === 0){
         toast("Answer at least one question.");
+        return;
+      }
+      if(!state.user){
+        toast("Still connecting… try again in a moment.");
         return;
       }
 
@@ -1123,7 +989,7 @@
             maxSum: res.maxSum,
             synergyNotes: res.synergyNotes,
             breakdown: res.breakdown,
-            settingsSnapshot: state.settings, // so historical attempts remain explainable even if admin changes scales later
+            settingsSnapshot: state.settings,
           }
         };
         const ref = await addDoc(collection(db, "attempts"), attemptDoc);
@@ -1140,19 +1006,12 @@
     updateLive(computeScore(qs, answers));
   }
 
-  function safeJsonParse(s){
-    try{ return JSON.parse(s); }catch{ return null; }
-  }
+  function safeJsonParse(s){ try{ return JSON.parse(s); }catch{ return null; } }
 
   async function fetchMyAttempts(){
     if(!state.user) return [];
     const out = [];
-    const qref = query(
-      collection(db, "attempts"),
-      where("uid","==", state.user.uid),
-      orderBy("createdAt","desc"),
-      limit(50)
-    );
+    const qref = query(collection(db, "attempts"), where("uid","==", state.user.uid), orderBy("createdAt","desc"), limit(50));
     const snap = await getDocs(qref);
     snap.forEach(d=> out.push({ id:d.id, ...d.data() }));
     return out;
@@ -1169,136 +1028,6 @@
     if(attempt.public === true) return true;
     if(state.user && attempt.uid === state.user.uid) return true;
     return false;
-  }
-
-  function renderAttemptCard(attempt, opts={}){
-    const c = attempt?.computed;
-    const isMine = state.user && attempt.uid === state.user.uid;
-    const canShare = isMine;
-    const pts = [{ x:c.x, y:c.y, label: opts.label || "You", color: opts.color || "rgba(124,156,255,.95)" }];
-
-    const sector = SECTORS.find(s=>s.key===c.sectorKey);
-    const sectorColor = sector?.color || getCSS("--grey");
-
-    return `
-      <div class="card">
-        <h2>Result</h2>
-        <div class="row">
-          <span class="badge primary">X: <span class="mono">${c.x.toFixed(3)}</span></span>
-          <span class="badge primary">Y: <span class="mono">${c.y.toFixed(3)}</span></span>
-          <span class="badge warn">Radicalism: <span class="mono">${c.r.toFixed(3)}</span></span>
-        </div>
-        <div class="spacer"></div>
-        <div class="row">
-          <span class="badge" style="border-color:${hexToRgba(sectorColor, .4)}; background:${hexToRgba(sectorColor,.12)}; color:#e9eefc">
-            Nearest sector: <b style="color:${sectorColor}">${htmlEscape(c.sectorName || c.sectorKey)}</b>
-          </span>
-          <span class="badge">${htmlEscape(c.category || "—")}</span>
-        </div>
-        <div class="spacer"></div>
-        <div class="item">
-          <div class="title">${htmlEscape(c.label || "—")}</div>
-          <div class="meta">Attempt: ${htmlEscape(attempt.id)} · ${htmlEscape(fmtTime(attempt.createdAt))}</div>
-        </div>
-        <div class="spacer"></div>
-        <div class="canvasWrap">
-          <canvas id="${opts.canvasId}" width="520" height="520"></canvas>
-        </div>
-        <div class="spacer"></div>
-
-        ${canShare ? `
-          <div class="row">
-            <button class="btn small ${attempt.public ? 'warn' : ''}" type="button" data-action="togglePublic">
-              ${attempt.public ? 'Make private' : 'Make public (shareable)'}
-            </button>
-            <button class="btn small" type="button" data-action="copyLink" ${attempt.public ? "" : "disabled"}>
-              Copy share link
-            </button>
-            <a class="btn small" href="#/compare?ids=${encodeURIComponent(attempt.id)}">Compare</a>
-          </div>
-          <div class="spacer"></div>
-          <div class="smallnote muted">
-            Public share links are readable by anyone who has the link (per Firestore rules). Private attempts remain visible only to you.
-          </div>
-        ` : `
-          <div class="smallnote muted">This is a read-only view. Sharing controls require ownership.</div>
-        `}
-
-        <div class="hr"></div>
-        <div class="row">
-          <a class="btn" href="#/ledger">Open ledger</a>
-          <a class="btn primary" href="#/quiz">Retake test</a>
-        </div>
-      </div>
-    `;
-  }
-
-  async function renderAttemptPage(id, isShare=false){
-    const attempt = await fetchAttemptById(id);
-    if(!attempt){
-      $app.innerHTML = `<div class="card"><h2>Not found</h2><div class="smallnote muted">No attempt with that ID.</div></div>`;
-      return;
-    }
-    if(!attemptCanView(attempt)){
-      $app.innerHTML = `
-        <div class="card">
-          <h2>Access denied</h2>
-          <div class="smallnote muted">This attempt is private. Ask the owner to make it public and share the link.</div>
-        </div>
-      `;
-      return;
-    }
-
-    const canvasId = "c_attempt";
-    $app.innerHTML = `
-      <div class="grid cols2">
-        ${renderAttemptCard(attempt, { canvasId, label: isShare ? "Shared" : "You" })}
-        <div class="card">
-          <h2>Transparency Ledger</h2>
-          <div class="smallnote muted">
-            This shows exactly how your coordinate was computed: per-question weight, importance multiplier, answer value, and final contribution.
-          </div>
-          <div class="hr"></div>
-          ${renderLedgerTables(attempt)}
-        </div>
-      </div>
-    `;
-
-    // draw
-    const canvas = document.getElementById(canvasId);
-    drawCompass(canvas, [
-      { x: attempt.computed.x, y: attempt.computed.y, label: isShare ? "Shared" : "You", color:"rgba(124,156,255,.95)" }
-    ]);
-
-    // wire share controls (owner only)
-    const btnToggle = $app.querySelector('[data-action="togglePublic"]');
-    const btnCopy = $app.querySelector('[data-action="copyLink"]');
-
-    if(btnToggle){
-      btnToggle.onclick = async ()=>{
-        try{
-          const newVal = !(attempt.public === true);
-          await updateDoc(doc(db,"attempts", attempt.id), { public: newVal });
-          attempt.public = newVal;
-          toast(newVal ? "Now public (shareable)." : "Now private.");
-          render(); // rerender to refresh buttons
-        }catch(e){
-          toast("Failed: " + (e?.message || e));
-        }
-      };
-    }
-
-    if(btnCopy){
-      btnCopy.onclick = async ()=>{
-        try{
-          const link = `${location.origin}${location.pathname}#/share/${attempt.id}`;
-          await navigator.clipboard.writeText(link);
-          toast("Share link copied.");
-        }catch{
-          toast("Copy failed. Manually copy from address bar.");
-        }
-      };
-    }
   }
 
   function renderLedgerTables(attempt){
@@ -1328,7 +1057,7 @@
         <div class="top">
           <div>
             <div class="title">Synergy notes (${synergy.length})</div>
-            <div class="meta">Only applied when your answer was Neutral/Ambivalent/N/A and your tag stance was consistent enough.</div>
+            <div class="meta">Applied only when your answer was Neutral/Ambivalent and your tag stance was consistent enough.</div>
           </div>
         </div>
         <div class="spacer"></div>
@@ -1373,17 +1102,129 @@
     `;
   }
 
-  async function renderLedger(){
-    if(!state.user){
+  async function renderAttemptPage(id, isShare=false){
+    const attempt = await fetchAttemptById(id);
+    if(!attempt){
+      $app.innerHTML = `<div class="card"><h2>Not found</h2><div class="smallnote muted">No attempt with that ID.</div></div>`;
+      return;
+    }
+    if(!attemptCanView(attempt)){
       $app.innerHTML = `
         <div class="card">
-          <h2>Result ledger</h2>
-          <div class="smallnote muted">Sign in to see your saved attempts.</div>
-          <div class="spacer"></div>
-          <button class="btn good" type="button" id="goLogin">Sign in</button>
+          <h2>Access denied</h2>
+          <div class="smallnote muted">This attempt is private. Ask the owner to make it public and share the link.</div>
         </div>
       `;
-      document.getElementById("goLogin").onclick = ()=> navTo("#/login");
+      return;
+    }
+
+    const c = attempt.computed;
+    const canvasId = "c_attempt";
+    const isMine = state.user && attempt.uid === state.user.uid;
+
+    const sector = SECTORS.find(s=>s.key===c.sectorKey);
+    const sectorColor = sector?.color || getCSS("--grey");
+
+    $app.innerHTML = `
+      <div class="grid cols2">
+        <div class="card">
+          <h2>Result</h2>
+          <div class="row">
+            <span class="badge primary">X: <span class="mono">${c.x.toFixed(3)}</span></span>
+            <span class="badge primary">Y: <span class="mono">${c.y.toFixed(3)}</span></span>
+            <span class="badge warn">Radicalism: <span class="mono">${c.r.toFixed(3)}</span></span>
+          </div>
+          <div class="spacer"></div>
+          <div class="row">
+            <span class="badge" style="border-color:${hexToRgba(sectorColor, .4)}; background:${hexToRgba(sectorColor,.12)}; color:#e9eefc">
+              Nearest sector: <b style="color:${sectorColor}">${htmlEscape(c.sectorName || c.sectorKey)}</b>
+            </span>
+            <span class="badge">${htmlEscape(c.category || "—")}</span>
+          </div>
+          <div class="spacer"></div>
+          <div class="item">
+            <div class="title">${htmlEscape(c.label || "—")}</div>
+            <div class="meta">Attempt: ${htmlEscape(attempt.id)} · ${htmlEscape(fmtTime(attempt.createdAt))}</div>
+          </div>
+          <div class="spacer"></div>
+          <div class="canvasWrap">
+            <canvas id="${canvasId}" width="520" height="520"></canvas>
+          </div>
+          <div class="spacer"></div>
+
+          ${isMine ? `
+            <div class="row">
+              <button class="btn small ${attempt.public ? 'warn' : ''}" type="button" data-action="togglePublic">
+                ${attempt.public ? 'Make private' : 'Make public (shareable)'}
+              </button>
+              <button class="btn small" type="button" data-action="copyLink" ${attempt.public ? "" : "disabled"}>
+                Copy share link
+              </button>
+              <a class="btn small" href="#/compare?ids=${encodeURIComponent(attempt.id)}">Compare</a>
+            </div>
+            <div class="spacer"></div>
+            <div class="smallnote muted">
+              Public share links are readable by anyone with the link. Private attempts are visible only to the owner UID.
+            </div>
+          ` : `
+            <div class="smallnote muted">Read-only view (sharing controls require ownership).</div>
+          `}
+
+          <div class="hr"></div>
+          <div class="row">
+            <a class="btn" href="#/ledger">Open ledger</a>
+            <a class="btn primary" href="#/quiz">Retake test</a>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>Transparency Ledger</h2>
+          <div class="smallnote muted">
+            Exact computation: per-question weight, importance multiplier, answer value, and final contribution.
+          </div>
+          <div class="hr"></div>
+          ${renderLedgerTables(attempt)}
+        </div>
+      </div>
+    `;
+
+    drawCompass(document.getElementById(canvasId), [
+      { x: c.x, y: c.y, label: isShare ? "Shared" : "You", color:"rgba(124,156,255,.95)" }
+    ]);
+
+    const btnToggle = $app.querySelector('[data-action="togglePublic"]');
+    const btnCopy = $app.querySelector('[data-action="copyLink"]');
+
+    if(btnToggle){
+      btnToggle.onclick = async ()=>{
+        try{
+          const newVal = !(attempt.public === true);
+          await updateDoc(doc(db,"attempts", attempt.id), { public: newVal });
+          attempt.public = newVal;
+          toast(newVal ? "Now public (shareable)." : "Now private.");
+          render();
+        }catch(e){
+          toast("Failed: " + (e?.message || e));
+        }
+      };
+    }
+
+    if(btnCopy){
+      btnCopy.onclick = async ()=>{
+        try{
+          const link = `${location.origin}${location.pathname}#/share/${attempt.id}`;
+          await navigator.clipboard.writeText(link);
+          toast("Share link copied.");
+        }catch{
+          toast("Copy failed. Manually copy from address bar.");
+        }
+      };
+    }
+  }
+
+  async function renderLedger(){
+    if(!state.user){
+      $app.innerHTML = `<div class="card"><h2>Connecting…</h2><div class="smallnote muted">Guest session is loading.</div></div>`;
       return;
     }
 
@@ -1431,7 +1272,12 @@
       <div class="grid cols2">
         <div class="card">
           <h2>Your attempts</h2>
-          <div class="smallnote muted">Saved attempts are immutable records with the full scoring breakdown.</div>
+          <div class="smallnote muted">
+            ${isGuest()
+              ? `You are currently a <b>Guest</b>. Attempts are still saved, but tied to this device/browser unless you upgrade.`
+              : `Attempts are tied to your account UID and persist across devices.`
+            }
+          </div>
           <div class="hr"></div>
           <div class="list">
             ${items || `<div class="smallnote muted">No attempts yet. Take the test.</div>`}
@@ -1448,9 +1294,7 @@
           <div class="spacer"></div>
           <button class="btn good" id="cmp_go" type="button">Compare</button>
           <div class="hr"></div>
-          <div class="smallnote muted">
-            If an ID belongs to someone else, it must be public to load.
-          </div>
+          <div class="smallnote muted">If an ID belongs to someone else, it must be public to load.</div>
         </div>
       </div>
     `;
@@ -1487,9 +1331,7 @@
             <canvas id="c_cmp" width="520" height="520"></canvas>
           </div>
           <div class="spacer"></div>
-          <div class="smallnote muted">
-            Each dot is one attempt. Use the ledger per attempt for full transparency.
-          </div>
+          <div class="smallnote muted">Each dot is one attempt. Use the ledger per attempt for full transparency.</div>
         </div>
       </div>
     `;
@@ -1528,13 +1370,9 @@
       "rgba(139,92,246,.95)",
     ];
 
-    const points = attempts.map((a,i)=>({
-      x:a.computed.x, y:a.computed.y,
-      label: (i+1).toString(),
-      color: colors[i % colors.length]
-    }));
-
-    drawCompass(document.getElementById("c_cmp"), points);
+    drawCompass(document.getElementById("c_cmp"), attempts.map((a,i)=>({
+      x:a.computed.x, y:a.computed.y, label:String(i+1), color: colors[i % colors.length]
+    })));
 
     const list = attempts.map((a,i)=>{
       const c = a.computed;
@@ -1572,16 +1410,25 @@
   }
 
   async function renderSuggest(){
+    // IMPORTANT: in this build, suggesting/voting is restricted to non-Guest accounts (to cut spam).
+    // Guest can still take test, save attempts, share/compare, view ledger.
     if(!state.user){
+      $app.innerHTML = `<div class="card"><h2>Connecting…</h2><div class="smallnote muted">Guest session is loading.</div></div>`;
+      return;
+    }
+    if(isGuest()){
       $app.innerHTML = `
         <div class="card">
           <h2>Suggest questions</h2>
-          <div class="smallnote muted">Sign in to submit and vote.</div>
+          <div class="smallnote muted">
+            Suggestions/voting are restricted to non-Guest accounts (anti-spam).
+            <div class="spacer"></div>
+            You can still take the test and share results as Guest.
+          </div>
           <div class="spacer"></div>
-          <button class="btn good" type="button" id="goLogin">Sign in</button>
+          <button class="btn good" type="button" onclick="location.hash='#/login'">Sign in / Upgrade</button>
         </div>
       `;
-      document.getElementById("goLogin").onclick = ()=> navTo("#/login");
       return;
     }
 
@@ -1591,9 +1438,7 @@
       <div class="grid cols2">
         <div class="card">
           <h2>Submit a suggestion</h2>
-          <div class="smallnote muted">
-            Suggestions can be upvoted/downvoted. Admin can accept/reject, and accepted suggestions can be promoted into real questions.
-          </div>
+          <div class="smallnote muted">Suggestions can be upvoted/downvoted. Admin can accept/reject or promote into real questions.</div>
           <div class="hr"></div>
 
           <label>Question text</label>
@@ -1618,7 +1463,7 @@
 
           <button id="s_submit" class="btn good" type="button">Submit suggestion</button>
           <div class="spacer"></div>
-          <div class="smallnote muted">Keep it clean and testable: one claim per question, not a paragraph.</div>
+          <div class="smallnote muted">Keep it clean and testable: one claim per question.</div>
         </div>
 
         <div class="card">
@@ -1647,8 +1492,7 @@
 
       try{
         await addDoc(collection(db,"suggestions"), {
-          text,
-          direction,
+          text, direction,
           weight: clamp(weight, 0.05, 5),
           tags,
           status: "pending",
@@ -1665,7 +1509,7 @@
       }
     };
 
-    async function vote(sid, dir){ // dir = +1 / -1
+    async function vote(sid, dir){
       try{
         const sugRef = doc(db, "suggestions", sid);
         const voteRef = doc(db, "suggestions", sid, "votes", state.user.uid);
@@ -1674,12 +1518,11 @@
           const vSnap = await tx.get(voteRef);
           const cur = vSnap.exists() ? Number(vSnap.data().v || 0) : 0;
           let next = dir;
-          if(cur === dir) next = 0; // toggle off
+          if(cur === dir) next = 0;
 
           const delta = next - cur;
-          if(delta !== 0){
-            tx.update(sugRef, { score: increment(delta) });
-          }
+          if(delta !== 0) tx.update(sugRef, { score: increment(delta) });
+
           if(next === 0){
             if(vSnap.exists()) tx.delete(voteRef);
           }else{
@@ -1743,8 +1586,7 @@
         }
         const snap = await getDocs(qref);
         snap.forEach(d=> out.push({ id:d.id, ...d.data() }));
-      }catch(e){
-        // fallback without composite ordering if index missing
+      }catch{
         try{
           const snap = await getDocs(collection(db,"suggestions"));
           snap.forEach(d=>{
@@ -1761,7 +1603,6 @@
         return;
       }
 
-      // get my votes for displayed suggestions
       const myVotes = new Map();
       for(const s of out){
         try{
@@ -1845,7 +1686,20 @@
 
   async function renderAdmin(){
     if(!state.user){
-      $app.innerHTML = `<div class="card"><h2>Admin</h2><div class="smallnote muted">Sign in first.</div></div>`;
+      $app.innerHTML = `<div class="card"><h2>Admin</h2><div class="smallnote muted">Connecting…</div></div>`;
+      return;
+    }
+    if(isGuest()){
+      $app.innerHTML = `
+        <div class="card">
+          <h2>Admin</h2>
+          <div class="smallnote muted">
+            Admin requires a non-Guest account.
+            <div class="spacer"></div>
+            <button class="btn good" type="button" onclick="location.hash='#/login'">Sign in / Upgrade</button>
+          </div>
+        </div>
+      `;
       return;
     }
     if(!state.isAdmin){
@@ -1853,7 +1707,7 @@
         <div class="card">
           <h2>Admin</h2>
           <div class="smallnote muted">
-            Access denied. To become admin, create a Firestore document:
+            Access denied. To become admin, create Firestore doc:
             <div class="spacer"></div>
             <div class="mono">admins/${htmlEscape(state.user.uid)}</div>
           </div>
@@ -1915,14 +1769,11 @@
             <button id="set_reload" class="btn" type="button">Reload from Firestore</button>
           </div>
           <div class="spacer"></div>
-          <div class="smallnote muted">
-            Changing scales affects future attempts, but each attempt stores a snapshot of settings for transparency.
-          </div>
+          <div class="smallnote muted">Each attempt stores a snapshot of settings so old results remain explainable.</div>
         </div>
       </div>
     `;
 
-    // populate settings editor
     document.getElementById("set_json").value = JSON.stringify(state.settings, null, 2);
 
     document.getElementById("set_reset").onclick = ()=>{
@@ -1938,8 +1789,7 @@
 
     document.getElementById("set_save").onclick = async ()=>{
       try{
-        const txt = document.getElementById("set_json").value;
-        const obj = JSON.parse(txt);
+        const obj = JSON.parse(document.getElementById("set_json").value);
         await setDoc(doc(db,"settings","scoring"), obj, { merge:false });
         await loadSettings();
         toast("Settings saved.");
@@ -1949,12 +1799,11 @@
     };
 
     async function refreshQuestionList(){
-      // load ALL questions (enabled + disabled)
       const out = [];
       try{
         const snap = await getDocs(query(collection(db,"questions"), orderBy("createdAt","desc"), limit(200)));
         snap.forEach(d=> out.push({ id:d.id, ...d.data() }));
-      }catch(e){
+      }catch{
         const snap = await getDocs(collection(db,"questions"));
         snap.forEach(d=> out.push({ id:d.id, ...d.data() }));
         out.sort((a,b)=> (b.createdAt?.seconds||0)-(a.createdAt?.seconds||0));
@@ -2015,16 +1864,14 @@
       const text = document.getElementById("q_text").value.trim();
       const direction = document.getElementById("q_dir").value;
       const weight = Number(document.getElementById("q_weight").value || 1);
-      const tags = (document.getElementById("q_tags").value || "")
-        .split(",").map(t=>t.trim()).filter(Boolean);
+      const tags = (document.getElementById("q_tags").value || "").split(",").map(t=>t.trim()).filter(Boolean);
 
       if(text.length < 8) return toast("Write a longer question.");
       if(!SECTORS.some(s=>s.key===direction)) return toast("Invalid direction.");
 
       try{
         await addDoc(collection(db,"questions"), {
-          text,
-          direction,
+          text, direction,
           weight: clamp(weight, 0.05, 5),
           tags,
           enabled: true,
@@ -2042,7 +1889,6 @@
     };
 
     document.getElementById("q_seed").onclick = async ()=>{
-      // a few neutral, non-extremist example statements — replace freely
       const samples = [
         { text:"A strong national identity is important for social cohesion.", direction:"BLUE", weight:1.0, tags:["nationalism","identity"] },
         { text:"Economic inequality is one of the biggest sources of social instability.", direction:"GREEN", weight:1.0, tags:["economy","inequality"] },
@@ -2077,13 +1923,17 @@
     const r = route();
     const [p0, p1] = r.parts;
 
-    // always keep UI chrome accurate
+    // header state
     if(state.user){
-      $userTag.textContent = `${state.user.displayName || "User"} · ${state.user.email || ""}`.trim();
-      $authBtn.style.display = "none";
+      if(state.user.isAnonymous){
+        $userTag.textContent = `Guest · ${state.user.uid.slice(0,8)}…`;
+      }else{
+        $userTag.textContent = `${state.user.displayName || "User"} · ${state.user.email || ""}`.trim();
+      }
+      $authBtn.style.display = "inline-flex";
       $signOutBtn.style.display = "inline-flex";
     }else{
-      $userTag.textContent = "Not signed in";
+      $userTag.textContent = "Connecting…";
       $authBtn.style.display = "inline-flex";
       $signOutBtn.style.display = "none";
     }
@@ -2101,8 +1951,8 @@
     return renderHome();
   }
 
-  // ---- Boot ----
-  async function bootSignedIn(user){
+  // ---- Boot & Guest auto-signin ----
+  async function bootForUser(user){
     state.user = user;
     state.isAdmin = user ? await checkAdmin(user.uid) : false;
 
@@ -2112,12 +1962,25 @@
   }
 
   onAuthStateChanged(auth, async (user)=>{
-    await bootSignedIn(user);
+    try{
+      if(!user){
+        // Automatic Guest mode: user never has to authenticate manually
+        await signInAnonymously(auth);
+        return; // will re-trigger onAuthStateChanged
+      }
+      await bootForUser(user);
+    }catch(e){
+      toast("Auth error: " + (e?.message || e));
+      // still render something
+      state.user = null;
+      state.isAdmin = false;
+      await loadSettings();
+      await loadQuestions();
+      await render();
+    }
   });
 
   window.addEventListener("hashchange", render);
-
-  // initial render (before auth resolves)
   render();
 </script>
 </body>
