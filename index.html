@@ -166,7 +166,7 @@
         <div class="logo"></div>
         <div>
           <h1>Hexa-Political Compass</h1>
-          <div class="sub">Coordinate-based politico-ideological classification (6 color sectors + apolitical center)</div>
+          <div class="sub">Poles are the 6 political positions; colours are the bridging filters between poles (each split into two slices).</div>
         </div>
       </div>
 
@@ -210,160 +210,89 @@
     serverTimestamp, runTransaction, increment
   } from "https://www.gstatic.com/firebasejs/12.7.0/firebase-firestore.js";
 
-  // ---- Firebase config (PASTE YOUR REAL ONE HERE) ----
+  // ---- Firebase config (yours) ----
   const firebaseConfig = {
-    apiKey: "PASTE_YOURS",
-    authDomain: "PASTE_YOURS",
-    projectId: "PASTE_YOURS",
-    storageBucket: "PASTE_YOURS",
-    messagingSenderId: "PASTE_YOURS",
-    appId: "PASTE_YOURS",
+    apiKey: "AIzaSyAtVzsSQpngelRO3Yn49cKPzGgU0jtqRfk",
+    authDomain: "hexa-political-compass.firebaseapp.com",
+    projectId: "hexa-political-compass",
+    storageBucket: "hexa-political-compass.firebasestorage.app",
+    messagingSenderId: "1055196691338",
+    appId: "1:1055196691338:web:b25959417b5a7099eb2673",
+    measurementId: "G-PVBZBEDRK8"
   };
 
   const app = initializeApp(firebaseConfig);
   const auth = getAuth(app);
   const db = getFirestore(app);
 
-  // ---------- MODEL ----------
-  // Colors clockwise: Brown, Blue, Purple, Green, Red, Red-Brown
-  // Borders between colors define the 6 "politics poles":
-  // Brown+RedBrown -> Third-Position; Blue+Brown -> Reactionary; Purple+Blue -> Right-wing;
-  // Green+Purple -> Centrist; Red+Green -> Left-wing; RedBrown+Red -> Syncretic
-  // Center -> Apoliticism/Pragmatism
-
-  const SECTORS = [
-    { key: "BROWN",     name: "Brown",      color: getCSS("--brown"),    angleDeg:  90 },
-    { key: "BLUE",      name: "Blue",       color: getCSS("--blue"),     angleDeg:  30 },
-    { key: "PURPLE",    name: "Purple",     color: getCSS("--purple"),   angleDeg: -30 },
-    { key: "GREEN",     name: "Green",      color: getCSS("--green"),    angleDeg: -90 },
-    { key: "RED",       name: "Red",        color: getCSS("--red"),      angleDeg: -150 },
-    { key: "REDBROWN",  name: "Red-Brown",  color: getCSS("--redbrown"), angleDeg: 150 },
-  ];
-
-  // Clockwise order (matches your spec)
-  const ORDER = ["BROWN","BLUE","PURPLE","GREEN","RED","REDBROWN"];
-
-  const CENTER = { key: "CENTER", name:"Apoliticism / Pragmatism", color:getCSS("--grey") };
-
-  // The 6 politics "poles" live on the borders between adjacent colors (mid-angles)
-  const POLES = [
-    { key:"THIRD",  name:"Third-Position Politics", pair:["BROWN","REDBROWN"], angleDeg: 120 },
-    { key:"REACT",  name:"Reactionary Politics",    pair:["BROWN","BLUE"],     angleDeg: 60 },
-    { key:"RIGHT",  name:"Right-wing Politics",     pair:["BLUE","PURPLE"],    angleDeg: 0 },
-    { key:"CENT",   name:"Centrist Politics",       pair:["PURPLE","GREEN"],   angleDeg: -60 },
-    { key:"LEFT",   name:"Left-wing Politics",      pair:["GREEN","RED"],      angleDeg: -120 },
-    { key:"SYNC",   name:"Syncretic Politics",      pair:["RED","REDBROWN"],   angleDeg: 180 }, // (-180 == 180)
-  ];
-
-  function pairKey(a,b){ return [a,b].sort().join("_"); }
-  const POLE_BY_PAIR = new Map(POLES.map(p=>[pairKey(p.pair[0], p.pair[1]), p]));
-
-  // Slice elaborations (each color is split into 2 slices, leaning to one border pole or the other)
-  // We attach slice definitions by: sectorKey -> neighborKey (which border it's leaning toward)
-  const SLICE_DEFS = {
-    RED: {
-      REDBROWN: {
-        title: "Syncretic-Left (Syncretic ↔ Left)",
-        leansToPole: "Syncretic Politics",
-        text:
-          "A leftist economic orientation expressed through the totalizing, nationalist, leader-centered style of the Syncretic border. " +
-          "Class struggle begins to resemble national struggle; the state becomes the primary vehicle."
-      },
-      GREEN: {
-        title: "Formal Left (Left ↔ Left)",
-        leansToPole: "Left-wing Politics",
-        text:
-          "State-structured leftism focused primarily on class and redistribution rather than national identity. " +
-          "Rigid, organized, and oriented toward centralized implementation."
-      }
-    },
-    GREEN: {
-      RED: {
-        title: "Formal Left (Left ↔ Left)",
-        leansToPole: "Left-wing Politics",
-        text:
-          "Revolutionary left energy without embracing heavy state authority; leans toward bottom-up organization. " +
-          "Shares leftist goals while rejecting authoritarian methods."
-      },
-      PURPLE: {
-        title: "Centrist-Left (Centrist ↔ Left)",
-        leansToPole: "Centrist Politics",
-        text:
-          "Left goals pursued through pragmatic liberal-democratic frameworks; radicalism softens into practical reforms. " +
-          "Blends social progress with institutional pluralism."
-      }
-    },
-    PURPLE: {
-      GREEN: {
-        title: "Centrist-Right (Centrist ↔ Right)",
-        leansToPole: "Centrist Politics",
-        text:
-          "Liberty-forward right-leaning centrism: personal freedom plus market orientation. " +
-          "Typically favors open markets and civil liberties within a constitutional framework."
-      },
-      BLUE: {
-        title: "Formal Right (Right ↔ Right)",
-        leansToPole: "Right-wing Politics",
-        text:
-          "Market hierarchy and competition taken seriously; tends toward minimal state or strict limits on state power. " +
-          "Sees state intervention as a distortion of natural economic order."
-      }
-    },
-    BLUE: {
-      PURPLE: {
-        title: "Formal Right (Right ↔ Right)",
-        leansToPole: "Right-wing Politics",
-        text:
-          "Conventional market-friendly rightism that accepts a state as necessary infrastructure for property and contracts. " +
-          "Order is a tool to keep markets functioning."
-      },
-      BROWN: {
-        title: "Reactionary-Right (Reactionary ↔ Right)",
-        leansToPole: "Reactionary Politics",
-        text:
-          "Cultural order outweighs economics: tradition, hierarchy, and restoration instincts dominate. " +
-          "The market becomes secondary to preserving inherited social structure."
-      }
-    },
-    BROWN: {
-      BLUE: {
-        title: "Reactionary (Reactionary ↔ Reactionary)",
-        leansToPole: "Reactionary Politics",
-        text:
-          "Strong hierarchy and inherited legitimacy; order is grounded in tradition rather than market outcomes. " +
-          "Authority is justified by lineage, religion, or long-standing institutions."
-      },
-      REDBROWN: {
-        title: "Third-Position Right (Third-Position ↔ Reactionary)",
-        leansToPole: "Third-Position Politics",
-        text:
-          "Reactionary restoration enforced through a collectivist, mobilized, total-state mentality. " +
-          "Seeks unity through a single overriding identity and command structure."
-      }
-    },
-    REDBROWN: {
-      BROWN: {
-        title: "Third-Position (Third-Position ↔ Third-Position)",
-        leansToPole: "Third-Position Politics",
-        text:
-          "A fully mobilized collectivist center: anti-liberal, anti-pluralist, oriented toward total political unity. " +
-          "Uses discipline and mass coordination as the main political method."
-      },
-      RED: {
-        title: "Syncretic (Syncretic ↔ Syncretic)",
-        leansToPole: "Syncretic Politics",
-        text:
-          "Left-origin or left-coded methods fused with nationalism, leader cult, and state-religion style cohesion. " +
-          "Ideology becomes a unified civil faith of the state."
-      }
-    }
-  };
-
+  // ============================
+  // MODEL (UPDATED)
+  // ============================
+  // Poles (vertices/borders) are the 6 political positions.
+  // Colours are bridging filters between adjacent poles.
+  //
+  // Angular convention (0° = right, 90° = up). We use degrees in [-180,180] for display,
+  // and [0,360) for sector math.
+  //
+  // Pole angles are the BORDER lines between colour sectors:
+  // Right-wing (0), Reactionary (60), Third-Position (120), Syncretic (180),
+  // Left-wing (240/-120), Centrist (300/-60).
   function getCSS(varName){ return getComputedStyle(document.documentElement).getPropertyValue(varName).trim(); }
   function rad(deg){ return deg * Math.PI / 180; }
   function clamp(x,a,b){ return Math.max(a, Math.min(b, x)); }
+  function to360(deg){ let d = deg % 360; if(d < 0) d += 360; return d; }
 
-  // ---------- DEFAULT SCORING SETTINGS ----------
+  const POLES = [
+    { key:"RIGHT",       name:"Right-wing Politics",     angle360:  0 },
+    { key:"REACTIONARY", name:"Reactionary Politics",    angle360: 60 },
+    { key:"THIRD",       name:"Third-Position Politics", angle360:120 },
+    { key:"SYNCRETIC",   name:"Syncretic Politics",      angle360:180 },
+    { key:"LEFT",        name:"Left-wing Politics",      angle360:240 },
+    { key:"CENTRIST",    name:"Centrist Politics",       angle360:300 },
+  ];
+
+  // Colour sectors (filters) sit BETWEEN poles; each is split into two "slices"
+  // leaning to one pole border or the other (per your excerpt).
+  const SECTORS = [
+    { key:"BLUE",     colorName:"Blue",      name:"Traditional Right",     color:getCSS("--blue"),     angleDeg:  30 },
+    { key:"BROWN",    colorName:"Brown",     name:"Absolutist Right",      color:getCSS("--brown"),    angleDeg:  90 },
+    { key:"REDBROWN", colorName:"Red-Brown", name:"Totalitarian Center",   color:getCSS("--redbrown"), angleDeg: 150 },
+    { key:"RED",      colorName:"Red",       name:"Statist Left",          color:getCSS("--red"),      angleDeg:-150 },
+    { key:"GREEN",    colorName:"Green",     name:"Libertarian Left",      color:getCSS("--green"),    angleDeg: -90 },
+    { key:"PURPLE",   colorName:"Purple",    name:"Libertarian Right",     color:getCSS("--purple"),   angleDeg: -30 },
+  ];
+
+  const GREY = { key:"GREY", name:"Grey (Center)", color:getCSS("--grey") };
+
+  // Sector ranges in [0,360): start inclusive, end exclusive
+  // plus slice names near start/end borders (leaning).
+  const SECTOR_RANGES = [
+    // BLUE: between RIGHT(0) and REACTIONARY(60)
+    { sectorKey:"BLUE", start:0, end:60, startPole:"RIGHT", endPole:"REACTIONARY",
+      sliceNearStart:"Formal Right", sliceNearEnd:"Reactionary-Right" },
+
+    // BROWN: between REACTIONARY(60) and THIRD(120)
+    { sectorKey:"BROWN", start:60, end:120, startPole:"REACTIONARY", endPole:"THIRD",
+      sliceNearStart:"Reactionary Partner", sliceNearEnd:"Third-Position Right" },
+
+    // REDBROWN: between THIRD(120) and SYNCRETIC(180)
+    { sectorKey:"REDBROWN", start:120, end:180, startPole:"THIRD", endPole:"SYNCRETIC",
+      sliceNearStart:"Third-Position Partner", sliceNearEnd:"Syncretic Partner" },
+
+    // RED: between SYNCRETIC(180) and LEFT(240)
+    { sectorKey:"RED", start:180, end:240, startPole:"SYNCRETIC", endPole:"LEFT",
+      sliceNearStart:"Syncretic-Left", sliceNearEnd:"Formal Left" },
+
+    // GREEN: between LEFT(240) and CENTRIST(300)
+    { sectorKey:"GREEN", start:240, end:300, startPole:"LEFT", endPole:"CENTRIST",
+      sliceNearStart:"Formal Left", sliceNearEnd:"Centrist-Left" },
+
+    // PURPLE: between CENTRIST(300) and RIGHT(360/0)
+    { sectorKey:"PURPLE", start:300, end:360, startPole:"CENTRIST", endPole:"RIGHT",
+      sliceNearStart:"Centrist-Right", sliceNearEnd:"Formal Right" },
+  ];
+
+  // ---- Default scoring settings (admin can override in Firestore) ----
   const DEFAULT_SETTINGS = {
     answerScale: [
       { key:"SD", label:"Strongly Disagree", value:-1.0 },
@@ -393,9 +322,12 @@
       ambivalentStrength: 0.20,
       threshold: 0.25,
     },
+    // How big the grey "liminal" center is
     centerRadius: 0.12,
+    // How far out counts as "radical" enough to consider "Pure pole" if close to a pole line
     pureCornerRadius: 0.82,
-    poleSnapDeg: 7, // if far from center AND within this many degrees of a pole line => "Pure Mono-Politics: <pole>"
+    // Degrees from a pole line to be considered "Pure <Pole>" (only when far enough out)
+    purePoleAngleToleranceDeg: 7,
   };
 
   const state = {
@@ -406,7 +338,7 @@
     lastAttempt: null,
   };
 
-  // ---------- UI ----------
+  // ---- UI helpers ----
   const $app = document.getElementById("app");
   const $toast = document.getElementById("toast");
   const $userTag = document.getElementById("userTag");
@@ -447,12 +379,12 @@
     return !!(state.user && state.user.isAnonymous);
   }
 
-  // ---------- AUTH MODAL ----------
+  // ---- Auth modal (upgrade guest OR sign in/register) ----
   function showAuthModal(){
     const guestNote = isGuest()
       ? `<span class="badge warn">You are currently browsing as Guest</span>
          <div class="spacer"></div>
-         <div class="smallnote muted">Upgrading links your Guest data (attempts under this UID) to an email/password account.</div>`
+         <div class="smallnote muted">Upgrading links your Guest attempts to an email/password account.</div>`
       : `<div class="smallnote muted">If you don’t want an account, ignore this — Guest mode already works.</div>`;
 
     $app.innerHTML = `
@@ -473,7 +405,6 @@
 
           <div class="spacer"></div>
           <div class="smallnote muted">
-            Note: signing into an existing account will switch away from the current Guest user.
             If you want to keep Guest attempts, use “Register / Upgrade” instead.
           </div>
         </div>
@@ -481,7 +412,7 @@
         <div class="card">
           <h2>${isGuest() ? "Register / Upgrade Guest" : "Create account"}</h2>
           <label>Display name</label>
-          <input id="su_name" type="text" placeholder="Username" autocomplete="name" />
+          <input id="su_name" type="text" placeholder="Arthur" autocomplete="name" />
           <div class="spacer"></div>
           <label>Email</label>
           <input id="su_email" type="email" placeholder="you@example.com" autocomplete="email" />
@@ -492,7 +423,7 @@
           <button id="su_btn" class="btn primary" type="button">${isGuest() ? "Upgrade" : "Register"}</button>
           <div class="spacer"></div>
           <div class="smallnote muted">
-            Admin can grant admin status by creating a Firestore doc: <span class="mono">admins/&lt;uid&gt;</span>.
+            Admin status is controlled by Firestore doc: <span class="mono">admins/&lt;uid&gt;</span>.
           </div>
         </div>
       </div>
@@ -558,7 +489,7 @@
     }
   };
 
-  // ---------- FIRESTORE HELPERS ----------
+  // ---- Firestore helpers ----
   async function loadSettings(){
     try{
       const snap = await getDoc(doc(db, "settings", "scoring"));
@@ -618,143 +549,114 @@
     return out;
   }
 
-  // ---------- SCORING + CLASSIFICATION ----------
+  // ============================
+  // SCORING
+  // ============================
   function sectorVec(sectorKey){
     const s = SECTORS.find(x=>x.key===sectorKey);
     if(!s) return { x:0, y:0, angleDeg:0 };
     const a = rad(s.angleDeg);
     return { x: Math.cos(a), y: Math.sin(a), angleDeg: s.angleDeg };
   }
-
-  function distAngDeg(a,b){
-    let d = Math.abs(a-b);
-    while(d>180) d = Math.abs(d-360);
-    return d;
-  }
-
-  function norm180(deg){
-    let d = deg;
-    while(d <= -180) d += 360;
-    while(d > 180) d -= 360;
-    return d;
-  }
-
   function getAnswerDef(key){ return state.settings.answerScale.find(a=>a.key===key) || null; }
   function getImportanceDef(n){
     return state.settings.importanceScale.find(i=>Number(i.key)===Number(n)) || state.settings.importanceScale[2];
   }
 
-  function nearestSector(deg){
-    const nearest = SECTORS
-      .map(s=>({ s, d: distAngDeg(deg, s.angleDeg) }))
-      .sort((p,q)=>p.d-q.d)[0].s;
-    return nearest;
+  function nearestPole(angle360){
+    const dist = (a,b)=>{
+      let d = Math.abs(a-b);
+      if(d > 180) d = 360 - d;
+      return d;
+    };
+    let best = null;
+    for(const p of POLES){
+      const d = dist(angle360, p.angle360);
+      if(!best || d < best.d) best = { pole:p, d };
+    }
+    return best; // {pole, d}
   }
 
-  function neighborKeys(sectorKey){
-    const i = ORDER.indexOf(sectorKey);
-    const prev = ORDER[(i - 1 + ORDER.length) % ORDER.length];
-    const next = ORDER[(i + 1) % ORDER.length];
-    return { prev, next };
-  }
-
-  function poleForPair(a,b){
-    return POLE_BY_PAIR.get(pairKey(a,b)) || null;
-  }
-
-  function boundaryAngleBetween(aKey, bKey){
-    // adjacent sectors only (60° apart in this model)
-    const a = SECTORS.find(s=>s.key===aKey)?.angleDeg ?? 0;
-    const b = SECTORS.find(s=>s.key===bKey)?.angleDeg ?? 0;
-    // signed shortest delta
-    let delta = norm180(b - a);
-    // midpoint
-    return norm180(a + delta/2);
-  }
-
-  function nearestPole(deg){
-    return POLES
-      .map(p=>({ p, d: distAngDeg(deg, p.angleDeg === 180 ? -180 : p.angleDeg) }))
-      .sort((x,y)=>x.d-y.d)[0];
+  function sectorFromAngle(angle360){
+    // angle360 in [0,360)
+    for(const s of SECTOR_RANGES){
+      if(s.start <= angle360 && angle360 < s.end) return s;
+    }
+    // edge case (shouldn't happen)
+    return SECTOR_RANGES[0];
   }
 
   function classifyPoint(x,y){
     const r = Math.hypot(x,y);
-    const radicalism = clamp(r,0,1);
-
     if(r <= state.settings.centerRadius){
       return {
-        sectorKey: CENTER.key,
-        sectorName: CENTER.name,
-        poleAName: null,
-        poleBName: null,
-        sliceTitle: null,
-        sliceText: "Low ideological drive or preference for pragmatism/apoliticism; outside the ring-of-ideology dynamics.",
-        category: CENTER.name,
-        label: CENTER.name,
-        radicalism,
-        angleDeg: 0,
-        poleName: null,
+        kind:"CENTER",
+        poleKey: GREY.key,
+        poleName: GREY.name,
+        sectorKey: GREY.key,
+        sectorName: GREY.name,
+        sectorColorName: "Grey",
+        filterName: GREY.name,
+        sliceName: "Liminal",
+        betweenPoles: "Grey Center",
+        radicalism:0,
+        angle360:0,
+        label:"Grey (Center) — Liminal"
       };
     }
 
-    const angle = Math.atan2(y,x);
-    const deg = norm180(angle * 180/Math.PI);
+    // Compute angle
+    const angleRad = Math.atan2(y,x);
+    let deg = angleRad * 180/Math.PI;   // [-180,180]
+    let a360 = to360(deg);              // [0,360)
 
-    // Pure pole snap (far from center AND near a pole border line)
-    const np = nearestPole(deg);
-    const poleSnap = Number(state.settings.poleSnapDeg ?? 7);
-    const pure = (r >= state.settings.pureCornerRadius) && (np.d <= poleSnap);
+    // Determine sector + slice
+    const sr = sectorFromAngle(a360);
+    const sector = SECTORS.find(s=>s.key===sr.sectorKey);
 
-    const near = nearestSector(deg);
-    const { prev, next } = neighborKeys(near.key);
+    const distToStart = a360 - sr.start;     // within [0,60)
+    const distToEnd = sr.end - a360;         // within (0,60]
+    const nearerStart = (distToStart <= distToEnd);
 
-    const polePrev = poleForPair(near.key, prev);
-    const poleNext = poleForPair(near.key, next);
+    const sliceName = nearerStart ? sr.sliceNearStart : sr.sliceNearEnd;
+    const leanPoleKey = nearerStart ? sr.startPole : sr.endPole;
 
-    const bPrev = boundaryAngleBetween(near.key, prev);
-    const bNext = boundaryAngleBetween(near.key, next);
+    const poleLean = POLES.find(p=>p.key===leanPoleKey);
+    const poleA = POLES.find(p=>p.key===sr.startPole);
+    const poleB = POLES.find(p=>p.key===sr.endPole);
+    const betweenPoles = `${poleA?.name || sr.startPole} ↔ ${poleB?.name || sr.endPole}`;
 
-    const dPrev = distAngDeg(deg, bPrev);
-    const dNext = distAngDeg(deg, bNext);
+    // Nearest pole (for "pure" checks)
+    const np = nearestPole(a360);
 
-    const toward = (dPrev <= dNext) ? prev : next;
-    const slice = SLICE_DEFS?.[near.key]?.[toward] || null;
+    const pureByAngle = (r >= state.settings.pureCornerRadius) &&
+      (np.d <= Number(state.settings.purePoleAngleToleranceDeg ?? 7));
 
-    if(pure){
-      return {
-        sectorKey: near.key,
-        sectorName: near.name,
-        poleAName: polePrev?.name || null,
-        poleBName: poleNext?.name || null,
-        sliceTitle: slice?.title || null,
-        sliceText: slice?.text || null,
-        category: np.p.name,
-        label: `Pure Mono-Politics: ${np.p.name}`,
-        radicalism,
-        angleDeg: deg,
-        poleName: np.p.name,
-      };
+    const radicalism = clamp(r,0,1);
+
+    let label;
+    if(pureByAngle){
+      label = `Pure ${np.pole.name}`;
+    } else {
+      label = `${sliceName} · ${sector?.name || sr.sectorKey} (${sector?.colorName || sr.sectorKey})`;
     }
-
-    const bridge = (polePrev && poleNext)
-      ? `${polePrev.name} ↔ ${poleNext.name}`
-      : (polePrev?.name || poleNext?.name || "Unclassified");
-
-    const sliceLabel = slice?.title ? `${slice.title}` : `${near.name} sector`;
 
     return {
-      sectorKey: near.key,
-      sectorName: near.name,
-      poleAName: polePrev?.name || null,
-      poleBName: poleNext?.name || null,
-      sliceTitle: slice?.title || null,
-      sliceText: slice?.text || null,
-      category: bridge,
-      label: sliceLabel,
+      kind: pureByAngle ? "PURE_POLE" : "SECTOR_SLICE",
+      poleKey: np.pole.key,
+      poleName: np.pole.name,
+      poleAngleDistance: np.d,
+      sectorKey: sr.sectorKey,
+      sectorName: sector?.name || sr.sectorKey,
+      sectorColorName: sector?.colorName || sr.sectorKey,
+      filterName: sector?.name || sr.sectorKey,
+      sliceName,
+      leanPoleKey,
+      leanPoleName: poleLean?.name || leanPoleKey,
+      betweenPoles,
       radicalism,
-      angleDeg: deg,
-      poleName: null,
+      angle360: a360,
+      label
     };
   }
 
@@ -864,14 +766,16 @@
     let x = rawX / maxSum;
     let y = rawY / maxSum;
 
-    const rr = Math.hypot(x,y);
-    if(rr > 1){ x /= rr; y /= rr; }
+    const r = Math.hypot(x,y);
+    if(r > 1){ x /= r; y /= r; }
 
     const cls = classifyPoint(x,y);
     return { x, y, r: Math.hypot(x,y), classification: cls, breakdown, synergyNotes, maxSum };
   }
 
-  // ---------- CANVAS DRAW ----------
+  // ============================
+  // CANVAS DRAWING (UPDATED)
+  // ============================
   function hexToRgba(hex, a){
     const h = (hex||"").trim();
     if(h.startsWith("#") && (h.length===7)){
@@ -891,15 +795,21 @@
     const cx = W/2, cy = H/2;
     const R = Math.min(W,H) * 0.42;
 
-    const verts = SECTORS.map(s=>{
-      const a = rad(s.angleDeg);
-      return { x: cx + Math.cos(a)*R, y: cy - Math.sin(a)*R };
-    });
+    // draw colour wedges (filters)
+    const verts = SECTORS
+      .slice()
+      .sort((a,b)=> to360(a.angleDeg) - to360(b.angleDeg))
+      .map(s=>{
+        const a = rad(s.angleDeg);
+        return { s, x: cx + Math.cos(a)*R, y: cy - Math.sin(a)*R };
+      });
 
-    for(let i=0;i<SECTORS.length;i++){
-      const s = SECTORS[i];
+    // We need wedges in correct order; use sector centers in clockwise order by angle360.
+    for(let i=0;i<verts.length;i++){
+      const s = verts[i].s;
       const v1 = verts[i];
-      const v2 = verts[(i+1)%SECTORS.length];
+      const v2 = verts[(i+1)%verts.length];
+
       ctx.beginPath();
       ctx.moveTo(cx,cy);
       ctx.lineTo(v1.x,v1.y);
@@ -911,13 +821,15 @@
       ctx.stroke();
     }
 
+    // grey center
     ctx.beginPath();
     ctx.arc(cx,cy, R*state.settings.centerRadius, 0, Math.PI*2);
-    ctx.fillStyle = hexToRgba(CENTER.color, 0.28);
+    ctx.fillStyle = hexToRgba(GREY.color, 0.28);
     ctx.fill();
     ctx.strokeStyle = "rgba(255,255,255,.10)";
     ctx.stroke();
 
+    // guide circles
     for(const k of [0.25, 0.5, 0.75, 1.0]){
       ctx.beginPath();
       ctx.arc(cx,cy, R*k, 0, Math.PI*2);
@@ -925,20 +837,49 @@
       ctx.stroke();
     }
 
-    ctx.font = "12px system-ui";
-    ctx.fillStyle = "rgba(233,238,252,.8)";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    for(let i=0;i<SECTORS.length;i++){
-      const s = SECTORS[i];
+    // draw pole boundary lines + labels (poles = vertices/borders)
+    ctx.lineWidth = 1;
+    for(const p of POLES){
+      const a = rad(p.angle360);
+      const x2 = cx + Math.cos(a)*R;
+      const y2 = cy - Math.sin(a)*R;
+
+      ctx.beginPath();
+      ctx.moveTo(cx,cy);
+      ctx.lineTo(x2,y2);
+      ctx.strokeStyle = "rgba(255,255,255,.10)";
+      ctx.stroke();
+
+      // label pole outside
+      const lx = cx + Math.cos(a)*(R*1.15);
+      const ly = cy - Math.sin(a)*(R*1.15);
+      ctx.font = "12px system-ui";
+      ctx.fillStyle = "rgba(233,238,252,.82)";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(p.name.replace(" Politics",""), lx, ly);
+    }
+
+    // label sector filter names inside wedges
+    for(const s of SECTORS){
       const a = rad(s.angleDeg);
-      const lx = cx + Math.cos(a)*(R*1.08);
-      const ly = cy - Math.sin(a)*(R*1.08);
+      const lx = cx + Math.cos(a)*(R*0.58);
+      const ly = cy - Math.sin(a)*(R*0.58);
+      ctx.font = "11px system-ui";
+      ctx.fillStyle = "rgba(233,238,252,.70)";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
       ctx.fillText(s.name, lx, ly);
     }
-    ctx.fillStyle = "rgba(233,238,252,.7)";
-    ctx.fillText("Apoliticism", cx, cy);
 
+    // center label
+    ctx.font = "12px system-ui";
+    ctx.fillStyle = "rgba(233,238,252,.70)";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("Grey", cx, cy);
+
+    // points
     for(const p of points || []){
       const px = cx + p.x * R;
       const py = cy - p.y * R;
@@ -959,27 +900,23 @@
     }
   }
 
-  // ---------- PAGES ----------
+  // ============================
+  // ROUTING + PAGES
+  // ============================
   function renderHome(){
     $app.innerHTML = `
       <div class="grid cols2">
         <div class="card">
-          <h2>What this is</h2>
+          <h2>How your model works (updated)</h2>
           <div class="smallnote">
-            A 6-color coordinate compass with a <b>center of Apoliticism/Pragmatism</b>.
-            The borders between colors define the six “pole politics”:
+            <b>Poles (the borders/vertices)</b> are the six political positions:
+            Right-wing, Reactionary, Third-Position, Syncretic, Left-wing, Centrist.
             <div class="spacer"></div>
-            <div class="list">
-              <div class="item"><span class="badge">Brown + Red-Brown</span> → <b>Third-Position Politics</b></div>
-              <div class="item"><span class="badge">Blue + Brown</span> → <b>Reactionary Politics</b></div>
-              <div class="item"><span class="badge">Purple + Blue</span> → <b>Right-wing Politics</b></div>
-              <div class="item"><span class="badge">Green + Purple</span> → <b>Centrist Politics</b></div>
-              <div class="item"><span class="badge">Red + Green</span> → <b>Left-wing Politics</b></div>
-              <div class="item"><span class="badge">Red-Brown + Red</span> → <b>Syncretic Politics</b></div>
-            </div>
+            <b>Colours (the sectors)</b> are <i>bridging filters</i> between two adjacent poles. Each colour sector is split into two slices:
+            one slice leans toward one pole-border, the other slice leans toward the other pole-border.
             <div class="spacer"></div>
-            Each colored sector is split into <b>two slices</b>, leaning toward one border-pole or the other.
-            Your result shows both the <b>color filter</b> and the <b>slice</b>.
+            <span class="badge warn">Radicalism</span> is simply distance from center; the grey center is liminal.
+            If you are far out and close to a pole-line, you can be classified as <b>Pure</b> that pole.
           </div>
           <div class="hr"></div>
           <div class="row">
@@ -1000,16 +937,18 @@
           </div>
           <div class="spacer"></div>
           <div class="smallnote muted">
-            Tip: If you’re far from the center and close to a border line, the system labels it as “Pure Mono-Politics” of that pole.
+            Poles are labeled around the outside. Sector names appear inside their colour wedge.
           </div>
         </div>
       </div>
     `;
     drawCompass(document.getElementById("c_preview"), [
-      { x:0.00, y:0.00, label:"Apolitical", color:"rgba(107,114,128,.95)" },
+      { x:0.00, y:0.00, label:"Center", color:"rgba(107,114,128,.95)" },
       { x:0.62, y:0.18, label:"Example", color:"rgba(124,156,255,.95)" },
     ]);
   }
+
+  function safeJsonParse(s){ try{ return JSON.parse(s); }catch{ return null; } }
 
   function renderQuiz(){
     const qs = state.questions;
@@ -1023,7 +962,7 @@
       return;
     }
 
-    const key = "hpc_draft_answers_v1";
+    const key = "hpc_draft_answers_v2";
     const answers = safeJsonParse(localStorage.getItem(key)) || {};
     const answerOptions = state.settings.answerScale;
     const impOptions = state.settings.importanceScale;
@@ -1033,7 +972,7 @@
         <div class="card">
           <h2>Test</h2>
           <div class="smallnote muted">
-            Guest mode is fine — no account required. Your attempt will be saved under your current Guest UID (or your account UID).
+            Questions push you toward a <b>colour sector (filter)</b>. Your final point is then classified by pole/sector/slice.
           </div>
           <div class="hr"></div>
 
@@ -1051,7 +990,7 @@
           </div>
           <div class="spacer"></div>
           <div class="smallnote muted">
-            Transparency: the ledger stores every question, your answer, your importance weight, and each coordinate contribution.
+            Transparency: the ledger stores every question, your answer, importance weight, and each coordinate contribution.
           </div>
         </div>
 
@@ -1075,14 +1014,14 @@
               <div class="v mono" id="kpi_r">0.00</div>
             </div>
             <div class="box">
-              <div class="t">Label</div>
+              <div class="t">Classification</div>
               <div class="v" id="kpi_label">—</div>
             </div>
           </div>
 
           <div class="hr"></div>
           <div class="smallnote muted">
-            “Synergy” applies on submit: it nudges Neutral/Ambivalent answers based on tag-consistent non-neutral answers.
+            “Synergy” (optional) nudges Neutral/Ambivalent answers using tag-consistency with your non-neutral answers.
           </div>
         </div>
       </div>
@@ -1096,13 +1035,15 @@
         const a = answers[q.id] || { choiceKey:"N", importanceKey:3 };
         const tags = Array.isArray(q.tags) && q.tags.length ? q.tags : [];
         const sector = SECTORS.find(s=>s.key===q.direction);
+        const badgeText = sector ? `${sector.name} (${sector.colorName})` : q.direction;
+
         return `
           <div class="item">
             <div class="top">
               <div style="flex:1">
                 <p class="title"><span class="badge primary">Q${idx+1}</span> ${htmlEscape(q.text)}</p>
                 <div class="meta">
-                  <span class="badge">Dir: <b style="color:${sector?.color || 'inherit'}">${htmlEscape(q.direction)}</b></span>
+                  <span class="badge">Filter: <b style="color:${sector?.color || 'inherit'}">${htmlEscape(badgeText)}</b></span>
                   <span class="badge">Weight: <span class="mono">${Number(q.weight ?? 1).toFixed(2)}</span></span>
                   ${tags.length ? `<div class="chips" style="margin-top:6px">${tags.map(t=>`<span class="chip">#${htmlEscape(t)}</span>`).join("")}</div>` : ``}
                 </div>
@@ -1188,16 +1129,25 @@
           answers,
           computed: {
             x: res.x, y: res.y, r: res.r,
+            // UPDATED computed payload
+            kind: res.classification.kind,
+            poleKey: res.classification.poleKey,
+            poleName: res.classification.poleName,
+            poleAngleDistance: res.classification.poleAngleDistance ?? null,
+
             sectorKey: res.classification.sectorKey,
             sectorName: res.classification.sectorName,
-            poleAName: res.classification.poleAName,
-            poleBName: res.classification.poleBName,
-            poleName: res.classification.poleName, // present if snapped as pure pole
-            category: res.classification.category,
+            sectorColorName: res.classification.sectorColorName,
+            filterName: res.classification.filterName,
+            sliceName: res.classification.sliceName,
+            leanPoleKey: res.classification.leanPoleKey ?? null,
+            leanPoleName: res.classification.leanPoleName ?? null,
+            betweenPoles: res.classification.betweenPoles,
+
             label: res.classification.label,
             radicalism: res.classification.radicalism,
-            sliceTitle: res.classification.sliceTitle,
-            sliceText: res.classification.sliceText,
+            angle360: res.classification.angle360,
+
             maxSum: res.maxSum,
             synergyNotes: res.synergyNotes,
             breakdown: res.breakdown,
@@ -1217,8 +1167,6 @@
     renderQuestions();
     updateLive(computeScore(qs, answers));
   }
-
-  function safeJsonParse(s){ try{ return JSON.parse(s); }catch{ return null; } }
 
   async function fetchMyAttempts(){
     if(!state.user) return [];
@@ -1251,11 +1199,13 @@
       const dir = SECTORS.find(s=>s.key===r.direction);
       const color = dir?.color || "#bbb";
       const note = (r.notes && r.notes.length) ? `<div class="smallnote warnText" style="margin-top:6px">${htmlEscape(r.notes.join(" "))}</div>` : "";
+      const dirLabel = dir ? `${dir.name} (${dir.colorName})` : r.direction;
+
       return `
         <tr>
           <td class="mono">${i+1}</td>
           <td>${htmlEscape(r.text)}</td>
-          <td><span class="badge" style="border-color:${hexToRgba(color,.45)}; background:${hexToRgba(color,.12)}; color:#e9eefc">${htmlEscape(r.direction)}</span></td>
+          <td><span class="badge" style="border-color:${hexToRgba(color,.45)}; background:${hexToRgba(color,.12)}; color:#e9eefc">${htmlEscape(dirLabel)}</span></td>
           <td>${htmlEscape(r.choiceLabel)} <div class="meta mono">${Number(r.baseValue).toFixed(2)}${r.inferredValue ? ` + ${Number(r.inferredValue).toFixed(2)}(sy)` : ``}</div></td>
           <td class="mono">${Number(r.weight).toFixed(2)} × ${Number(r.w/Number(r.weight||1)).toFixed(2)} (imp)</td>
           <td class="mono">${Number(r.contribX).toFixed(4)}</td>
@@ -1292,12 +1242,23 @@
       </div>
       <div class="spacer"></div>
 
+      <div class="item">
+        <div class="title">${htmlEscape(c.label || "—")}</div>
+        <div class="meta">
+          <span class="badge primary">Pole: ${htmlEscape(c.poleName || "—")}</span>
+          <span class="badge">Between: ${htmlEscape(c.betweenPoles || "—")}</span>
+          ${c.filterName ? `<span class="badge">Filter: ${htmlEscape(c.filterName)} (${htmlEscape(c.sectorColorName || "")})</span>` : ``}
+          ${c.sliceName ? `<span class="badge warn">Slice: ${htmlEscape(c.sliceName)}</span>` : ``}
+        </div>
+      </div>
+
+      <div class="spacer"></div>
       <table class="table">
         <thead>
           <tr>
             <th>#</th>
             <th>Question</th>
-            <th>Dir</th>
+            <th>Filter Dir</th>
             <th>Answer</th>
             <th>Weight × Importance</th>
             <th>ΔX</th>
@@ -1337,18 +1298,6 @@
     const sector = SECTORS.find(s=>s.key===c.sectorKey);
     const sectorColor = sector?.color || getCSS("--grey");
 
-    const poleLine = c.poleName ? `<span class="badge good">Pure pole: ${htmlEscape(c.poleName)}</span>` : "";
-    const bridgeLine = (!c.poleName && c.poleAName && c.poleBName)
-      ? `<span class="badge">Bridge: ${htmlEscape(c.poleAName)} ↔ ${htmlEscape(c.poleBName)}</span>`
-      : "";
-
-    const sliceBox = (c.sliceTitle || c.sliceText) ? `
-      <div class="item">
-        <div class="title">${htmlEscape(c.sliceTitle || "Slice")}</div>
-        <div class="smallnote muted" style="margin-top:6px">${htmlEscape(c.sliceText || "")}</div>
-      </div>
-    ` : "";
-
     $app.innerHTML = `
       <div class="grid cols2">
         <div class="card">
@@ -1358,23 +1307,18 @@
             <span class="badge primary">Y: <span class="mono">${c.y.toFixed(3)}</span></span>
             <span class="badge warn">Radicalism: <span class="mono">${c.r.toFixed(3)}</span></span>
           </div>
-
           <div class="spacer"></div>
-          <div class="row">
-            <span class="badge" style="border-color:${hexToRgba(sectorColor, .4)}; background:${hexToRgba(sectorColor,.12)}; color:#e9eefc">
-              Color filter: <b style="color:${sectorColor}">${htmlEscape(c.sectorName || c.sectorKey)}</b>
-            </span>
-            <span class="badge primary">Label: ${htmlEscape(c.label || "—")}</span>
-            ${poleLine}
-            ${bridgeLine}
-          </div>
 
-          <div class="spacer"></div>
-          ${sliceBox}
-
-          <div class="spacer"></div>
           <div class="item">
-            <div class="title">${htmlEscape(c.category || "—")}</div>
+            <div class="title">${htmlEscape(c.label || "—")}</div>
+            <div class="meta">
+              <span class="badge primary">Pole: ${htmlEscape(c.poleName || "—")}</span>
+              <span class="badge">Between: ${htmlEscape(c.betweenPoles || "—")}</span>
+              ${c.filterName ? `<span class="badge" style="border-color:${hexToRgba(sectorColor,.4)}; background:${hexToRgba(sectorColor,.12)}; color:#e9eefc">
+                Filter: <b style="color:${sectorColor}">${htmlEscape(c.filterName)}</b> (${htmlEscape(c.sectorColorName || "")})
+              </span>` : ``}
+              ${c.sliceName ? `<span class="badge warn">Slice: ${htmlEscape(c.sliceName)}</span>` : ``}
+            </div>
             <div class="meta">Attempt: ${htmlEscape(attempt.id)} · ${htmlEscape(fmtTime(attempt.createdAt))}</div>
           </div>
 
@@ -1382,7 +1326,6 @@
           <div class="canvasWrap">
             <canvas id="${canvasId}" width="520" height="520"></canvas>
           </div>
-
           <div class="spacer"></div>
 
           ${isMine ? `
@@ -1470,12 +1413,13 @@
     }
 
     const items = attempts.map(a=>{
-      const c = a.computed || {};
+      const c = a.computed;
       const badge = a.public ? `<span class="badge good">Public</span>` : `<span class="badge">Private</span>`;
       const sec = SECTORS.find(s=>s.key===c?.sectorKey);
       const col = sec?.color || getCSS("--grey");
 
-      const poleBadge = c.poleName ? `<span class="badge good">Pure: ${htmlEscape(c.poleName)}</span>` : "";
+      const filterLine = c?.filterName ? `· ${c.filterName} (${c.sectorColorName || ""})` : "";
+      const sliceLine = c?.sliceName ? `· ${c.sliceName}` : "";
 
       return `
         <div class="item">
@@ -1486,15 +1430,16 @@
               </div>
               <div class="meta">
                 ${badge}
-                ${poleBadge}
                 <span class="badge">Time: ${htmlEscape(fmtTime(a.createdAt))}</span>
-                <span class="badge" style="border-color:${hexToRgba(col,.4)}; background:${hexToRgba(col,.12)}; color:#e9eefc">
-                  Filter: <b style="color:${col}">${htmlEscape(c?.sectorName || c?.sectorKey || "—")}</b>
-                </span>
+                <span class="badge primary">Pole: ${htmlEscape(c?.poleName || "—")}</span>
+                ${c?.betweenPoles ? `<span class="badge">Between: ${htmlEscape(c.betweenPoles)}</span>` : ``}
+                ${c?.filterName ? `<span class="badge" style="border-color:${hexToRgba(col,.4)}; background:${hexToRgba(col,.12)}; color:#e9eefc">
+                  Filter: <b style="color:${col}">${htmlEscape(c.filterName)}</b>
+                </span>` : ``}
+                ${c?.sliceName ? `<span class="badge warn">Slice: ${htmlEscape(c.sliceName)}</span>` : ``}
                 <span class="badge primary">X <span class="mono">${Number(c?.x ?? 0).toFixed(3)}</span></span>
                 <span class="badge primary">Y <span class="mono">${Number(c?.y ?? 0).toFixed(3)}</span></span>
                 <span class="badge warn">R <span class="mono">${Number(c?.r ?? 0).toFixed(3)}</span></span>
-                <span class="badge">${htmlEscape(c?.category || "—")}</span>
               </div>
             </div>
             <div class="row">
@@ -1512,8 +1457,8 @@
           <h2>Your attempts</h2>
           <div class="smallnote muted">
             ${isGuest()
-              ? `You are currently a <b>Guest</b>. Attempts are saved but tied to this device/browser unless you upgrade.`
-              : `Attempts are tied to your account UID and persist across devices.`
+              ? `You are currently a <b>Guest</b>. Attempts are saved under this device/browser unless you upgrade.`
+              : `Attempts are tied to your account and persist across devices.`
             }
           </div>
           <div class="hr"></div>
@@ -1615,7 +1560,6 @@
     const list = attempts.map((a,i)=>{
       const c = a.computed;
       const badge = a.public ? `<span class="badge good">Public</span>` : `<span class="badge">Private (yours)</span>`;
-      const pole = c.poleName ? `<span class="badge good">Pure: ${htmlEscape(c.poleName)}</span>` : "";
       return `
         <div class="item">
           <div class="top">
@@ -1626,12 +1570,14 @@
               </div>
               <div class="meta">
                 ${badge}
-                ${pole}
                 <span class="badge">Time: ${htmlEscape(fmtTime(a.createdAt))}</span>
+                <span class="badge primary">Pole: ${htmlEscape(c.poleName || "—")}</span>
+                ${c.betweenPoles ? `<span class="badge">Between: ${htmlEscape(c.betweenPoles)}</span>` : ``}
+                ${c.filterName ? `<span class="badge">Filter: ${htmlEscape(c.filterName)} (${htmlEscape(c.sectorColorName||"")})</span>` : ``}
+                ${c.sliceName ? `<span class="badge warn">Slice: ${htmlEscape(c.sliceName)}</span>` : ``}
                 <span class="badge primary">X <span class="mono">${c.x.toFixed(3)}</span></span>
                 <span class="badge primary">Y <span class="mono">${c.y.toFixed(3)}</span></span>
                 <span class="badge warn">R <span class="mono">${c.r.toFixed(3)}</span></span>
-                <span class="badge">${htmlEscape(c.category || "—")}</span>
               </div>
             </div>
           </div>
@@ -1650,6 +1596,7 @@
   }
 
   async function renderSuggest(){
+    // Suggestions/voting restricted to non-Guest accounts (anti-spam).
     if(!state.user){
       $app.innerHTML = `<div class="card"><h2>Connecting…</h2><div class="smallnote muted">Guest session is loading.</div></div>`;
       return;
@@ -1670,7 +1617,7 @@
       return;
     }
 
-    const sectorOpts = SECTORS.map(s=>`<option value="${s.key}">${htmlEscape(s.name)} (${s.key})</option>`).join("");
+    const sectorOpts = SECTORS.map(s=>`<option value="${s.key}">${htmlEscape(s.name)} (${s.colorName})</option>`).join("");
 
     $app.innerHTML = `
       <div class="grid cols2">
@@ -1685,7 +1632,7 @@
 
           <div class="split">
             <div>
-              <label>Direction</label>
+              <label>Filter direction (colour sector)</label>
               <select id="s_dir">${sectorOpts}</select>
             </div>
             <div>
@@ -1696,7 +1643,7 @@
 
           <div class="spacer"></div>
           <label>Tags (comma-separated)</label>
-          <input id="s_tags" placeholder="e.g. nationalism, economy, religion, authority" />
+          <input id="s_tags" placeholder="e.g. nationalism, economy, religion, lgbtq, authority" />
           <div class="spacer"></div>
 
           <button id="s_submit" class="btn good" type="button">Submit suggestion</button>
@@ -1726,7 +1673,7 @@
       const tags = tagsRaw ? tagsRaw.split(",").map(t=>t.trim()).filter(Boolean) : [];
 
       if(text.length < 8) return toast("Write a longer question.");
-      if(!SECTORS.some(s=>s.key===direction)) return toast("Pick a valid direction.");
+      if(!SECTORS.some(s=>s.key===direction)) return toast("Pick a valid sector.");
 
       try{
         await addDoc(collection(db,"suggestions"), {
@@ -1868,7 +1815,7 @@
                 <div class="meta">
                   ${statusBadge}
                   <span class="badge" style="border-color:${hexToRgba(col,.4)}; background:${hexToRgba(col,.12)}; color:#e9eefc">
-                    Dir: <b style="color:${col}">${htmlEscape(s.direction)}</b>
+                    Filter: <b style="color:${col}">${htmlEscape(sec ? `${sec.name} (${sec.colorName})` : s.direction)}</b>
                   </span>
                   <span class="badge">Weight: <span class="mono">${Number(s.weight ?? 1).toFixed(2)}</span></span>
                   <span class="badge primary">Score: <span class="mono">${Number(s.score ?? 0)}</span></span>
@@ -1954,13 +1901,13 @@
       return;
     }
 
-    const sectorOpts = SECTORS.map(s=>`<option value="${s.key}">${htmlEscape(s.name)} (${s.key})</option>`).join("");
+    const sectorOpts = SECTORS.map(s=>`<option value="${s.key}">${htmlEscape(s.name)} (${s.colorName})</option>`).join("");
 
     $app.innerHTML = `
       <div class="grid cols2">
         <div class="card">
           <h2>Questions</h2>
-          <div class="smallnote muted">Add/disable questions. Each question has: direction (color), weight, tags.</div>
+          <div class="smallnote muted">Add/disable questions. Each question pushes toward a <b>filter (colour sector)</b>.</div>
           <div class="hr"></div>
 
           <label>Question text</label>
@@ -1969,7 +1916,7 @@
 
           <div class="split">
             <div>
-              <label>Direction</label>
+              <label>Filter direction (colour sector)</label>
               <select id="q_dir">${sectorOpts}</select>
             </div>
             <div>
@@ -1980,7 +1927,7 @@
 
           <div class="spacer"></div>
           <label>Tags (comma-separated)</label>
-          <input id="q_tags" placeholder="e.g. economy, nationalism, religion, authority" />
+          <input id="q_tags" placeholder="e.g. economy, nationalism, religion, lgbtq, authority" />
           <div class="spacer"></div>
 
           <div class="row">
@@ -1995,7 +1942,7 @@
 
         <div class="card">
           <h2>Scoring settings</h2>
-          <div class="smallnote muted">Admin can modify answer values, importance multipliers, and synergy parameters (JSON).</div>
+          <div class="smallnote muted">Admin can modify answer values, importance multipliers, synergy parameters, pole tolerance, etc. (JSON).</div>
           <div class="hr"></div>
 
           <label>settings/scoring (JSON)</label>
@@ -2062,7 +2009,7 @@
                 <div class="meta">
                   ${en ? `<span class="badge good">Enabled</span>` : `<span class="badge bad">Disabled</span>`}
                   <span class="badge" style="border-color:${hexToRgba(col,.4)}; background:${hexToRgba(col,.12)}; color:#e9eefc">
-                    Dir: <b style="color:${col}">${htmlEscape(q.direction)}</b>
+                    Filter: <b style="color:${col}">${htmlEscape(sec ? `${sec.name} (${sec.colorName})` : q.direction)}</b>
                   </span>
                   <span class="badge">Weight: <span class="mono">${Number(q.weight ?? 1).toFixed(2)}</span></span>
                   <span class="badge">By: <span class="mono">${htmlEscape(q.createdBy || "—")}</span></span>
@@ -2105,7 +2052,7 @@
       const tags = (document.getElementById("q_tags").value || "").split(",").map(t=>t.trim()).filter(Boolean);
 
       if(text.length < 8) return toast("Write a longer question.");
-      if(!SECTORS.some(s=>s.key===direction)) return toast("Invalid direction.");
+      if(!SECTORS.some(s=>s.key===direction)) return toast("Invalid sector.");
 
       try{
         await addDoc(collection(db,"questions"), {
@@ -2156,11 +2103,12 @@
     await refreshQuestionList();
   }
 
-  // ---------- ROUTER ----------
+  // ---- Router render ----
   async function render(){
     const r = route();
     const [p0, p1] = r.parts;
 
+    // header state
     if(state.user){
       if(state.user.isAnonymous){
         $userTag.textContent = `Guest · ${state.user.uid.slice(0,8)}…`;
@@ -2188,7 +2136,7 @@
     return renderHome();
   }
 
-  // ---------- BOOT / GUEST AUTO SIGN-IN ----------
+  // ---- Boot & Guest auto-signin ----
   async function bootForUser(user){
     state.user = user;
     state.isAdmin = user ? await checkAdmin(user.uid) : false;
@@ -2201,6 +2149,7 @@
   onAuthStateChanged(auth, async (user)=>{
     try{
       if(!user){
+        // Automatic Guest mode
         await signInAnonymously(auth);
         return;
       }
@@ -2220,4 +2169,3 @@
 </script>
 </body>
 </html>
-
