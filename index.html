@@ -226,22 +226,21 @@
   const db = getFirestore(app);
 
   // ============================
-  // MODEL (UPDATED)
+  // MODEL
   // ============================
-  // Poles (vertices/borders) are the 6 political positions.
-  // Colours are bridging filters between adjacent poles.
-  //
-  // Angular convention (0° = right, 90° = up). We use degrees in [-180,180] for display,
-  // and [0,360) for sector math.
-  //
-  // Pole angles are the BORDER lines between colour sectors:
-  // Right-wing (0), Reactionary (60), Third-Position (120), Syncretic (180),
-  // Left-wing (240/-120), Centrist (300/-60).
   function getCSS(varName){ return getComputedStyle(document.documentElement).getPropertyValue(varName).trim(); }
   function rad(deg){ return deg * Math.PI / 180; }
   function clamp(x,a,b){ return Math.max(a, Math.min(b, x)); }
   function to360(deg){ let d = deg % 360; if(d < 0) d += 360; return d; }
 
+  // Pole/border angles (these are the corners/boundaries)
+  // This already matches the corners you described:
+  // Right between Blue & Purple (0)
+  // Reactionary between Brown & Blue (60)
+  // Third between Red-Brown & Brown (120)
+  // Syncretic between Red & Red-Brown (180)
+  // Left between Red & Green (240)
+  // Centrist between Green & Purple (300)
   const POLES = [
     { key:"RIGHT",       name:"Right-wing Politics",     angle360:  0 },
     { key:"REACTIONARY", name:"Reactionary Politics",    angle360: 60 },
@@ -251,8 +250,7 @@
     { key:"CENTRIST",    name:"Centrist Politics",       angle360:300 },
   ];
 
-  // Colour sectors (filters) sit BETWEEN poles; each is split into two "slices"
-  // leaning to one pole border or the other (per your excerpt).
+  // Colour sectors are bridging filters (centers are midpoints between borders)
   const SECTORS = [
     { key:"BLUE",     colorName:"Blue",      name:"Traditional Right",     color:getCSS("--blue"),     angleDeg:  30 },
     { key:"BROWN",    colorName:"Brown",     name:"Absolutist Right",      color:getCSS("--brown"),    angleDeg:  90 },
@@ -265,30 +263,24 @@
   const GREY = { key:"GREY", name:"Grey (Center)", color:getCSS("--grey") };
 
   // Sector ranges in [0,360): start inclusive, end exclusive
-  // plus slice names near start/end borders (leaning).
+  // These borders are the poles/corners exactly as requested.
   const SECTOR_RANGES = [
-    // BLUE: between RIGHT(0) and REACTIONARY(60)
-    { sectorKey:"BLUE", start:0, end:60, startPole:"RIGHT", endPole:"REACTIONARY",
+    { sectorKey:"BLUE",     start:0,   end:60,  startPole:"RIGHT",     endPole:"REACTIONARY",
       sliceNearStart:"Formal Right", sliceNearEnd:"Reactionary-Right" },
 
-    // BROWN: between REACTIONARY(60) and THIRD(120)
-    { sectorKey:"BROWN", start:60, end:120, startPole:"REACTIONARY", endPole:"THIRD",
+    { sectorKey:"BROWN",    start:60,  end:120, startPole:"REACTIONARY", endPole:"THIRD",
       sliceNearStart:"Reactionary Partner", sliceNearEnd:"Third-Position Right" },
 
-    // REDBROWN: between THIRD(120) and SYNCRETIC(180)
-    { sectorKey:"REDBROWN", start:120, end:180, startPole:"THIRD", endPole:"SYNCRETIC",
+    { sectorKey:"REDBROWN", start:120, end:180, startPole:"THIRD",     endPole:"SYNCRETIC",
       sliceNearStart:"Third-Position Partner", sliceNearEnd:"Syncretic Partner" },
 
-    // RED: between SYNCRETIC(180) and LEFT(240)
-    { sectorKey:"RED", start:180, end:240, startPole:"SYNCRETIC", endPole:"LEFT",
+    { sectorKey:"RED",      start:180, end:240, startPole:"SYNCRETIC", endPole:"LEFT",
       sliceNearStart:"Syncretic-Left", sliceNearEnd:"Formal Left" },
 
-    // GREEN: between LEFT(240) and CENTRIST(300)
-    { sectorKey:"GREEN", start:240, end:300, startPole:"LEFT", endPole:"CENTRIST",
+    { sectorKey:"GREEN",    start:240, end:300, startPole:"LEFT",      endPole:"CENTRIST",
       sliceNearStart:"Formal Left", sliceNearEnd:"Centrist-Left" },
 
-    // PURPLE: between CENTRIST(300) and RIGHT(360/0)
-    { sectorKey:"PURPLE", start:300, end:360, startPole:"CENTRIST", endPole:"RIGHT",
+    { sectorKey:"PURPLE",   start:300, end:360, startPole:"CENTRIST",  endPole:"RIGHT",
       sliceNearStart:"Centrist-Right", sliceNearEnd:"Formal Right" },
   ];
 
@@ -322,11 +314,8 @@
       ambivalentStrength: 0.20,
       threshold: 0.25,
     },
-    // How big the grey "liminal" center is
     centerRadius: 0.12,
-    // How far out counts as "radical" enough to consider "Pure pole" if close to a pole line
     pureCornerRadius: 0.82,
-    // Degrees from a pole line to be considered "Pure <Pole>" (only when far enough out)
     purePoleAngleToleranceDeg: 7,
   };
 
@@ -379,7 +368,7 @@
     return !!(state.user && state.user.isAnonymous);
   }
 
-  // ---- Auth modal (upgrade guest OR sign in/register) ----
+  // ---- Auth modal ----
   function showAuthModal(){
     const guestNote = isGuest()
       ? `<span class="badge warn">You are currently browsing as Guest</span>
@@ -490,6 +479,17 @@
   };
 
   // ---- Firestore helpers ----
+  function deepMerge(base, patch){
+    if(patch == null) return base;
+    if(Array.isArray(base) && Array.isArray(patch)) return patch;
+    if(typeof base !== "object" || typeof patch !== "object") return patch;
+    const out = Array.isArray(base) ? [...base] : { ...base };
+    for(const k of Object.keys(patch)){
+      out[k] = deepMerge(base?.[k], patch[k]);
+    }
+    return out;
+  }
+
   async function loadSettings(){
     try{
       const snap = await getDoc(doc(db, "settings", "scoring"));
@@ -538,19 +538,8 @@
     }
   }
 
-  function deepMerge(base, patch){
-    if(patch == null) return base;
-    if(Array.isArray(base) && Array.isArray(patch)) return patch;
-    if(typeof base !== "object" || typeof patch !== "object") return patch;
-    const out = Array.isArray(base) ? [...base] : { ...base };
-    for(const k of Object.keys(patch)){
-      out[k] = deepMerge(base?.[k], patch[k]);
-    }
-    return out;
-  }
-
   // ============================
-  // SCORING
+  // SCORING / CLASSIFICATION
   // ============================
   function sectorVec(sectorKey){
     const s = SECTORS.find(x=>x.key===sectorKey);
@@ -578,11 +567,9 @@
   }
 
   function sectorFromAngle(angle360){
-    // angle360 in [0,360)
     for(const s of SECTOR_RANGES){
       if(s.start <= angle360 && angle360 < s.end) return s;
     }
-    // edge case (shouldn't happen)
     return SECTOR_RANGES[0];
   }
 
@@ -591,12 +578,12 @@
     if(r <= state.settings.centerRadius){
       return {
         kind:"CENTER",
-        poleKey: GREY.key,
-        poleName: GREY.name,
-        sectorKey: GREY.key,
-        sectorName: GREY.name,
+        poleKey: "GREY",
+        poleName: "Grey (Center)",
+        sectorKey: "GREY",
+        sectorName: "Grey (Center)",
         sectorColorName: "Grey",
-        filterName: GREY.name,
+        filterName: "Grey (Center)",
         sliceName: "Liminal",
         betweenPoles: "Grey Center",
         radicalism:0,
@@ -605,17 +592,15 @@
       };
     }
 
-    // Compute angle
     const angleRad = Math.atan2(y,x);
-    let deg = angleRad * 180/Math.PI;   // [-180,180]
-    let a360 = to360(deg);              // [0,360)
+    const deg = angleRad * 180/Math.PI;   // [-180,180]
+    const a360 = to360(deg);              // [0,360)
 
-    // Determine sector + slice
     const sr = sectorFromAngle(a360);
     const sector = SECTORS.find(s=>s.key===sr.sectorKey);
 
-    const distToStart = a360 - sr.start;     // within [0,60)
-    const distToEnd = sr.end - a360;         // within (0,60]
+    const distToStart = a360 - sr.start;     // [0,60)
+    const distToEnd = sr.end - a360;         // (0,60]
     const nearerStart = (distToStart <= distToEnd);
 
     const sliceName = nearerStart ? sr.sliceNearStart : sr.sliceNearEnd;
@@ -626,7 +611,6 @@
     const poleB = POLES.find(p=>p.key===sr.endPole);
     const betweenPoles = `${poleA?.name || sr.startPole} ↔ ${poleB?.name || sr.endPole}`;
 
-    // Nearest pole (for "pure" checks)
     const np = nearestPole(a360);
 
     const pureByAngle = (r >= state.settings.pureCornerRadius) &&
@@ -718,7 +702,6 @@
       });
     }
 
-    // Synergy inference
     if(state.settings.synergy?.enabled){
       for(const row of breakdown){
         const q = questions.find(qq=>qq.id===row.qid);
@@ -774,7 +757,7 @@
   }
 
   // ============================
-  // CANVAS DRAWING (UPDATED)
+  // CANVAS DRAWING (FIXED SHIFT)
   // ============================
   function hexToRgba(hex, a){
     const h = (hex||"").trim();
@@ -787,6 +770,11 @@
     return `rgba(255,255,255,${a})`;
   }
 
+  function pointOnCircle(cx, cy, R, angleDeg360){
+    const a = rad(angleDeg360);
+    return { x: cx + Math.cos(a)*R, y: cy - Math.sin(a)*R };
+  }
+
   function drawCompass(canvas, points){
     const ctx = canvas.getContext("2d");
     const W = canvas.width, H = canvas.height;
@@ -795,27 +783,19 @@
     const cx = W/2, cy = H/2;
     const R = Math.min(W,H) * 0.42;
 
-    // draw colour wedges (filters)
-    const verts = SECTORS
-      .slice()
-      .sort((a,b)=> to360(a.angleDeg) - to360(b.angleDeg))
-      .map(s=>{
-        const a = rad(s.angleDeg);
-        return { s, x: cx + Math.cos(a)*R, y: cy - Math.sin(a)*R };
-      });
-
-    // We need wedges in correct order; use sector centers in clockwise order by angle360.
-    for(let i=0;i<verts.length;i++){
-      const s = verts[i].s;
-      const v1 = verts[i];
-      const v2 = verts[(i+1)%verts.length];
+    // ---- Draw colour sectors using POLE BORDERS (start/end) ----
+    // This fixes the "shift" so corners match borders exactly.
+    for(const sr of SECTOR_RANGES){
+      const sector = SECTORS.find(s=>s.key===sr.sectorKey);
+      const pStart = pointOnCircle(cx, cy, R, sr.start);
+      const pEnd   = pointOnCircle(cx, cy, R, sr.end === 360 ? 0 : sr.end);
 
       ctx.beginPath();
       ctx.moveTo(cx,cy);
-      ctx.lineTo(v1.x,v1.y);
-      ctx.lineTo(v2.x,v2.y);
+      ctx.lineTo(pStart.x, pStart.y);
+      ctx.lineTo(pEnd.x, pEnd.y);
       ctx.closePath();
-      ctx.fillStyle = hexToRgba(s.color, 0.22);
+      ctx.fillStyle = hexToRgba(sector?.color || "#999999", 0.22);
       ctx.fill();
       ctx.strokeStyle = "rgba(255,255,255,.08)";
       ctx.stroke();
@@ -837,39 +817,34 @@
       ctx.stroke();
     }
 
-    // draw pole boundary lines + labels (poles = vertices/borders)
+    // pole rays + pole labels (these are the CORNERS between the colour sectors)
     ctx.lineWidth = 1;
     for(const p of POLES){
-      const a = rad(p.angle360);
-      const x2 = cx + Math.cos(a)*R;
-      const y2 = cy - Math.sin(a)*R;
+      const p2 = pointOnCircle(cx, cy, R, p.angle360);
 
       ctx.beginPath();
       ctx.moveTo(cx,cy);
-      ctx.lineTo(x2,y2);
-      ctx.strokeStyle = "rgba(255,255,255,.10)";
+      ctx.lineTo(p2.x,p2.y);
+      ctx.strokeStyle = "rgba(255,255,255,.12)";
       ctx.stroke();
 
-      // label pole outside
-      const lx = cx + Math.cos(a)*(R*1.15);
-      const ly = cy - Math.sin(a)*(R*1.15);
+      const lab = pointOnCircle(cx, cy, R*1.16, p.angle360);
       ctx.font = "12px system-ui";
-      ctx.fillStyle = "rgba(233,238,252,.82)";
+      ctx.fillStyle = "rgba(233,238,252,.84)";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillText(p.name.replace(" Politics",""), lx, ly);
+      ctx.fillText(p.name.replace(" Politics",""), lab.x, lab.y);
     }
 
-    // label sector filter names inside wedges
+    // sector labels (filter names) at sector centers
     for(const s of SECTORS){
-      const a = rad(s.angleDeg);
-      const lx = cx + Math.cos(a)*(R*0.58);
-      const ly = cy - Math.sin(a)*(R*0.58);
+      const a360 = to360(s.angleDeg);
+      const lab = pointOnCircle(cx, cy, R*0.58, a360);
       ctx.font = "11px system-ui";
       ctx.fillStyle = "rgba(233,238,252,.70)";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillText(s.name, lx, ly);
+      ctx.fillText(s.name, lab.x, lab.y);
     }
 
     // center label
@@ -901,13 +876,13 @@
   }
 
   // ============================
-  // ROUTING + PAGES
+  // PAGES / ROUTER (unchanged)
   // ============================
   function renderHome(){
     $app.innerHTML = `
       <div class="grid cols2">
         <div class="card">
-          <h2>How your model works (updated)</h2>
+          <h2>How your model works</h2>
           <div class="smallnote">
             <b>Poles (the borders/vertices)</b> are the six political positions:
             Right-wing, Reactionary, Third-Position, Syncretic, Left-wing, Centrist.
@@ -937,7 +912,7 @@
           </div>
           <div class="spacer"></div>
           <div class="smallnote muted">
-            Poles are labeled around the outside. Sector names appear inside their colour wedge.
+            Corners are pole-borders. Colour wedges are now drawn between those borders (no rotation shift).
           </div>
         </div>
       </div>
@@ -1129,7 +1104,6 @@
           answers,
           computed: {
             x: res.x, y: res.y, r: res.r,
-            // UPDATED computed payload
             kind: res.classification.kind,
             poleKey: res.classification.poleKey,
             poleName: res.classification.poleName,
@@ -1418,9 +1392,6 @@
       const sec = SECTORS.find(s=>s.key===c?.sectorKey);
       const col = sec?.color || getCSS("--grey");
 
-      const filterLine = c?.filterName ? `· ${c.filterName} (${c.sectorColorName || ""})` : "";
-      const sliceLine = c?.sliceName ? `· ${c.sliceName}` : "";
-
       return `
         <div class="item">
           <div class="top">
@@ -1596,7 +1567,6 @@
   }
 
   async function renderSuggest(){
-    // Suggestions/voting restricted to non-Guest accounts (anti-spam).
     if(!state.user){
       $app.innerHTML = `<div class="card"><h2>Connecting…</h2><div class="smallnote muted">Guest session is loading.</div></div>`;
       return;
@@ -2103,12 +2073,10 @@
     await refreshQuestionList();
   }
 
-  // ---- Router render ----
   async function render(){
     const r = route();
     const [p0, p1] = r.parts;
 
-    // header state
     if(state.user){
       if(state.user.isAnonymous){
         $userTag.textContent = `Guest · ${state.user.uid.slice(0,8)}…`;
@@ -2136,7 +2104,6 @@
     return renderHome();
   }
 
-  // ---- Boot & Guest auto-signin ----
   async function bootForUser(user){
     state.user = user;
     state.isAdmin = user ? await checkAdmin(user.uid) : false;
@@ -2149,7 +2116,6 @@
   onAuthStateChanged(auth, async (user)=>{
     try{
       if(!user){
-        // Automatic Guest mode
         await signInAnonymously(auth);
         return;
       }
