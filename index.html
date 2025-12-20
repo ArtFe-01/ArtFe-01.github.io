@@ -308,7 +308,7 @@
     { key:"REDBROWN", colorName:"Red-Brown", name:"Revolutionary ThirdPos",   color:getCSS("--redbrown"), angleDeg: 120 },
   ];
 
-  const GREY = { key:"GREY", name:"Apoliticism / Pragmatism", color:getCSS("--grey") };
+  const GREY = { key:"GREY", name:"Grey (Center)", color:getCSS("--grey") };
 
   // Sector ranges in [0,360), defined by corner/pole boundaries.
   // IMPORTANT: Blue wraps (330 -> 30).
@@ -673,8 +673,8 @@
   function isValidDirKey(k){
     const kk = normalizeDirKey(k);
     if(!kk) return false;
-    if(kk === "GREY"){
-    return { label:"Apoliticism / Pragmatism", color:getCSS("--grey"), kind:"GREY", key:"GREY" };
+    if(kk === "GREY") return true;
+    return POLES.some(p => p.key === kk) || SECTORS.some(s => s.key === kk);
   }
 
   function dirVec(key){
@@ -699,8 +699,9 @@
     const kk = normalizeDirKey(key);
 
     if(kk === "GREY"){
-    return { label:"Apoliticism / Pragmatism", color:getCSS("--grey"), kind:"GREY", key:"GREY" };
-  }
+      return { label:"Grey (Center)", color:getCSS("--grey"), kind:"GREY", key:"GREY" };
+    }
+
     const pole = POLES.find(p => p.key === kk);
     if(pole){
       return {
@@ -855,7 +856,7 @@
         betweenPoles: "Grey Center",
         radicalism:0,
         angle360:0,
-        label:"Apoliticism / Pragmatism — Liminal"
+        label:"Grey (Center) — Liminal"
       };
     }
 
@@ -1202,7 +1203,7 @@
     ctx.fillStyle = "rgba(233,238,252,.70)";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText("Apoliticism/Pragmatism", cx, cy);
+    ctx.fillText("Grey", cx, cy);
 
     // points
     for(const p of points || []){
@@ -3030,5 +3031,3 @@ Local communities should govern themselves | Libertarian Left | 0.9 | decentrali
 </script>
 </body>
 </html>
-
-
