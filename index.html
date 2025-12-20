@@ -610,189 +610,203 @@
     return state.settings.importanceScale.find(i=>Number(i.key)===Number(n)) || state.settings.importanceScale[2];
   }
 
-  // ===== Pluri-direction support (POLE-first keys) =====
-  // Accepted user keys (case-insensitive):
-  //   Right-wing, Centrist, Left-wing, Syncretic, Reactionary, Third-Position
-  // Backwards compatible:
-  //   BLUE, PURPLE, GREEN, RED, REDBROWN, BROWN
+  // ===== NEW: Pluri-direction support (hierarchical, + pole-name keys) =====
 
-  function normalizeDirKey(raw){
-    const s = String(raw || "").trim();
-    if(!s) return "";
-    const canon = s.toUpperCase().replace(/[^A-Z]/g, ""); // strip spaces/hyphens/etc
+// Accept BOTH:
+// - old sector keys: BLUE, PURPLE, GREEN, RED, REDBROWN, BROWN
+// - new pole-name keys (recommended for UI): Right-wing, Centrist, Left-wing, Syncretic, Reactionary, Third-Position
+//
+// Hierarchy rule (when no explicit weights are provided):
+//   first = 1, second = 0.5, third = 0.25, ...
+// You can override by writing explicit weights: "Right-wing:0.6, Centrist:0.4"
 
-    const map = {
-      // poles (preferred)
-      THIRDPOSITION: "THIRD",
-      THIRD: "THIRD",
-      REACTIONARY: "REACTIONARY",
-      RIGHTWING: "RIGHT",
-      RIGHT: "RIGHT",
-      CENTRIST: "CENTRIST",
-      LEFTWING: "LEFT",
-      LEFT: "LEFT",
-      SYNCRETIC: "SYNCRETIC",
+// Optional: give poles a consistent color (used in badges/chips)
+const POLE_COLORS = {
+  THIRD:       getCSS("--redbrown"),
+  REACTIONARY: getCSS("--brown"),
+  RIGHT:       getCSS("--blue"),
+  CENTRIST:    getCSS("--grey"),
+  LEFT:        getCSS("--green"),
+  SYNCRETIC:   getCSS("--red"),
+};
 
-      // legacy sector keys (still accepted)
-      BLUE: "BLUE",
-      PURPLE: "PURPLE",
-      GREEN: "GREEN",
-      RED: "RED",
-      REDBROWN: "REDBROWN",
-      BROWN: "BROWN",
-    };
-    return map[canon] || "";
-  }
+// Normalize user input tokens into internal keys
+function normalizeDirKey(rawKey){
+  const k = String(rawKey || "").trim();
+  if(!k) return "";
 
-  function isValidSectorKey(k){
-    const key = normalizeDirKey(k);
-    if(!key) return false;
-    return POLES.some(p=>p.key===key) || SECTORS.some(s=>s.key===key);
-  }
+  const up = k.toUpperCase().replaceAll(" ", "").replaceAll("_","").replaceAll("-","");
 
-  function poleVec(poleKey){
-    const p = POLES.find(x=>x.key===poleKey);
-    if(!p) return { x:0, y:0, angleDeg:0 };
-    const a = rad(p.angle360);
-    return { x: Math.cos(a), y: Math.sin(a), angleDeg: p.angle360 };
-  }
+  // Allow friendly names:
+  // "Right-wing" -> RIGHT, "Third-Position" -> THIRD, etc.
+  const alias = {
+    RIGHTWING: "RIGHT",
+    RIGHT: "RIGHT",
+    CENTRIST: "CENTRIST",
+    LEFTWING: "LEFT",
+    LEFT: "LEFT",
+    SYNCRETIC: "SYNCRETIC",
+    REACTIONARY: "REACTIONARY",
+    THIRDPOSITION: "THIRD",
+    THIRD: "THIRD",
 
-  // Direction vector can be a POLE key (preferred) or a legacy SECTOR key.
-  function dirVecFromKey(dirKey){
-    const key = normalizeDirKey(dirKey) || String(dirKey||"").trim().toUpperCase();
-    if(POLES.some(p=>p.key===key)) return poleVec(key);
-    if(SECTORS.some(s=>s.key===key)) return sectorVec(key);
-    return { x:0, y:0, angleDeg:0 };
-  }
-
-  // Cosmetic colors for badges (poles are averaged from adjacent sector colors)
-  function hexToRgbObj(hex){
-    const h = String(hex||"").trim();
-    if(h.startsWith("#") && h.length===7){
-      return { r:parseInt(h.slice(1,3),16), g:parseInt(h.slice(3,5),16), b:parseInt(h.slice(5,7),16) };
-    }
-    return null;
-  }
-  function rgbObjToHex(rgb){
-    const to2 = (n)=> n.toString(16).padStart(2,"0");
-    return `#${to2(rgb.r)}${to2(rgb.g)}${to2(rgb.b)}`;
-  }
-  function mixHex(a,b,t=0.5){
-    const A = hexToRgbObj(a), B = hexToRgbObj(b);
-    if(!A || !B) return getCSS("--accent") || "#7c9cff";
-    const r = Math.round(A.r*(1-t) + B.r*t);
-    const g = Math.round(A.g*(1-t) + B.g*t);
-    const bb = Math.round(A.b*(1-t) + B.b*t);
-    return rgbObjToHex({ r, g, b: bb });
-  }
-
-  const DIR_COLORS = {
-    // poles (average of adjacent sector colors, clockwise)
-    THIRD:       mixHex(getCSS("--redbrown"), getCSS("--brown")),
-    REACTIONARY: mixHex(getCSS("--brown"),    getCSS("--blue")),
-    RIGHT:       mixHex(getCSS("--blue"),     getCSS("--purple")),
-    CENTRIST:    mixHex(getCSS("--purple"),   getCSS("--green")),
-    LEFT:        mixHex(getCSS("--green"),    getCSS("--red")),
-    SYNCRETIC:   mixHex(getCSS("--red"),      getCSS("--redbrown")),
-
-    // legacy sector colors
-    BLUE:     getCSS("--blue"),
-    PURPLE:   getCSS("--purple"),
-    GREEN:    getCSS("--green"),
-    RED:      getCSS("--red"),
-    REDBROWN: getCSS("--redbrown"),
-    BROWN:    getCSS("--brown"),
+    // keep legacy sector keys too:
+    BLUE: "BLUE",
+    PURPLE: "PURPLE",
+    GREEN: "GREEN",
+    RED: "RED",
+    REDBROWN: "REDBROWN",
+    BROWN: "BROWN",
   };
 
-  function dirMeta(dirKey){
-    const key = normalizeDirKey(dirKey) || String(dirKey||"").trim().toUpperCase();
+  return alias[up] || up;
+}
 
-    const pole = POLES.find(p=>p.key===key);
-    if(pole){
-      return { key, label: pole.name.replace(" Politics",""), color: DIR_COLORS[key] || (getCSS("--accent") || "#7c9cff") };
-    }
+function isValidDirKey(k){
+  const kk = normalizeDirKey(k);
+  if(!kk) return false;
+  return POLES.some(p => p.key === kk) || SECTORS.some(s => s.key === kk) || kk === "GREY";
+}
 
-    const sec = SECTORS.find(s=>s.key===key);
-    if(sec){
-      return { key, label: `${sec.name} (${sec.colorName})`, color: DIR_COLORS[key] || sec.color || (getCSS("--accent") || "#7c9cff") };
-    }
+// Vector for either a POLE key or a SECTOR key
+function dirVec(key){
+  const kk = normalizeDirKey(key);
 
-    return { key, label: String(dirKey||"").trim() || "—", color: getCSS("--accent") || "#7c9cff" };
+  const pole = POLES.find(p => p.key === kk);
+  if(pole){
+    const a = rad(pole.angle360);
+    return { x: Math.cos(a), y: Math.sin(a) };
   }
 
-  // Accepts:
-  // "Right-wing"
-  // "Right-wing:0.6, Centrist:0.4"
-  // "Right-wing, Centrist" (weights default to 1)
-  // (also accepts legacy: BLUE, PURPLE, ...)
-  function parseDirectionSpec(spec){
-    const s = String(spec || "").trim();
-    if(!s) return [];
-    const parts = s
-      .split(",")
-      .map(x=>x.trim())
-      .filter(Boolean)
-      .map(tok=>{
-        const [rawKey, rawW] = tok.split(":").map(z=>z.trim());
-        const key = normalizeDirKey(rawKey);
-        const w = rawW == null || rawW === "" ? 1 : Number(rawW);
-        return { key, w: Number.isFinite(w) ? w : 1 };
+  const sector = SECTORS.find(s => s.key === kk);
+  if(sector){
+    const a = rad(sector.angleDeg);
+    return { x: Math.cos(a), y: Math.sin(a) };
+  }
+
+  return { x: 0, y: 0 };
+}
+
+function dirDisplay(key){
+  const kk = normalizeDirKey(key);
+
+  const pole = POLES.find(p => p.key === kk);
+  if(pole){
+    return {
+      label: pole.name.replace(" Politics", ""),
+      color: POLE_COLORS[kk] || getCSS("--accent"),
+      kind: "POLE",
+      key: kk
+    };
+  }
+
+  const sector = SECTORS.find(s => s.key === kk);
+  if(sector){
+    return {
+      label: `${sector.name} (${sector.colorName})`,
+      color: sector.color,
+      kind: "SECTOR",
+      key: kk
+    };
+  }
+
+  return { label: kk || "—", color: "#aaa", kind: "UNKNOWN", key: kk };
+}
+
+// Accepts direction spec strings like:
+// "Right-wing"
+// "Right-wing, Centrist, Left-wing"
+// "Right-wing:0.6, Centrist:0.4"
+// "Right-wing > Centrist > Left-wing"  (hierarchy separator)
+function parseDirectionSpec(spec){
+  let s = String(spec || "").trim();
+  if(!s) return [];
+
+  // allow ">" as a hierarchy separator
+  s = s.replaceAll(">", ",");
+
+  const tokens = s
+    .split(",")
+    .map(x => x.trim())
+    .filter(Boolean);
+
+  const parts = [];
+  for(let i=0; i<tokens.length; i++){
+    const tok = tokens[i];
+    const [rawKey, rawW] = tok.split(":").map(z => z.trim());
+    const key = normalizeDirKey(rawKey);
+
+    if(!isValidDirKey(key)) continue;
+
+    let w;
+    if(rawW == null || rawW === ""){
+      // hierarchical default weight: 1, 0.5, 0.25, ...
+      w = Math.pow(0.5, i);
+    } else {
+      const num = Number(rawW);
+      w = Number.isFinite(num) ? num : Math.pow(0.5, i);
+    }
+
+    if(Math.abs(w) <= 1e-9) continue;
+    parts.push({ key, w });
+  }
+
+  return parts;
+}
+
+// Returns [{key,w}] from either:
+// - q.directions = [{key:"RIGHT", w:0.6}, ...]
+// - q.direction = "Right-wing" or "RIGHT:0.6, CENTRIST:0.4"
+// normalize=true => divide by sum(abs(w))
+function getQuestionDirParts(q, normalize=true){
+  let parts = [];
+
+  if(Array.isArray(q?.directions) && q.directions.length){
+    parts = q.directions
+      .map((d, idx)=>{
+        const key = normalizeDirKey(d.key ?? d.sectorKey ?? d.poleKey ?? d.dir ?? "");
+        let w = Number(d.w ?? d.weight ?? "");
+        if(!Number.isFinite(w)){
+          // keep hierarchy if stored without weight
+          w = Math.pow(0.5, idx);
+        }
+        return { key, w };
       })
-      .filter(p=>p.key && Math.abs(p.w) > 1e-9);
-
-    return parts;
+      .filter(p => isValidDirKey(p.key) && Math.abs(p.w) > 1e-9);
   }
 
-  // Returns [{key,w}] from either:
-  // - q.directions = [{key:"RIGHT", w:0.6}, ...]
-  // - q.direction  = "Right-wing:0.6, Centrist:0.4" (or legacy sector keys)
-  // normalize=true => divide by sum(abs(w)) so question strength doesn't inflate
-  function getQuestionDirParts(q, normalize=true){
-    let parts = [];
-
-    if(Array.isArray(q?.directions) && q.directions.length){
-      parts = q.directions
-        .map(d=>{
-          const key = normalizeDirKey(d.key ?? d.poleKey ?? d.sectorKey ?? d.dir ?? "");
-          const w = Number(d.w ?? d.weight ?? 1);
-          return { key, w: Number.isFinite(w) ? w : 1 };
-        })
-        .filter(p=>p.key && Math.abs(p.w) > 1e-9);
+  if(!parts.length && typeof q?.direction === "string" && q.direction.trim()){
+    parts = parseDirectionSpec(q.direction);
+    if(!parts.length && isValidDirKey(q.direction)){
+      parts = [{ key: normalizeDirKey(q.direction), w: 1 }];
     }
-
-    if(!parts.length && typeof q?.direction === "string" && q.direction.trim()){
-      parts = parseDirectionSpec(q.direction);
-      if(!parts.length){
-        const k = normalizeDirKey(q.direction);
-        if(k) parts = [{ key:k, w:1 }];
-      }
-    }
-
-    if(!parts.length) return [];
-    if(!normalize) return parts;
-
-    const sumAbs = parts.reduce((acc,p)=>acc + Math.abs(p.w), 0);
-    if(sumAbs <= 1e-9) return [];
-    return parts.map(p=>({ ...p, w: p.w / sumAbs }));
   }
 
-  function combinedVecFromParts(parts){
-    let x = 0, y = 0;
-    for(const p of parts){
-      const v = dirVecFromKey(p.key);
-      x += v.x * p.w;
-      y += v.y * p.w;
-    }
-    return { x, y };
-  }
+  if(!parts.length) return [];
+  if(!normalize) return parts;
 
-  function formatDirPartsForUI(parts, withNames=true){
-    return (parts || []).map(p=>{
-      const m = dirMeta(p.key);
-      return `${m.label}×${Number(p.w).toFixed(2)}`;
-    }).join(" + ");
+  const sumAbs = parts.reduce((acc,p)=>acc + Math.abs(p.w), 0);
+  if(sumAbs <= 1e-9) return [];
+  return parts.map(p=>({ ...p, w: p.w / sumAbs }));
+}
+
+function combinedVecFromParts(parts){
+  let x = 0, y = 0;
+  for(const p of parts){
+    const v = dirVec(p.key);
+    x += v.x * p.w;
+    y += v.y * p.w;
   }
-  // ===== END pluri-direction support =====
+  return { x, y };
+}
+
+function formatDirPartsForUI(parts){
+  return (parts || []).map(p=>{
+    const d = dirDisplay(p.key);
+    return `${d.label}×${Number(p.w).toFixed(2)}`;
+  }).join(" + ");
+}
+// ===== END hierarchical pluri-direction support =====
 
   function angleDist(a,b){
     let d = Math.abs(a-b);
@@ -2548,5 +2562,6 @@
 </script>
 </body>
 </html>
+
 
 
