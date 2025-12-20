@@ -2477,26 +2477,38 @@
   }
 
   // ---- Router render ----
+  // ---- Router render ----
   async function render(){
     const r = route();
     const [p0, p1] = r.parts;
-
-    if(state.user){
-      if(state.user.isAnonymous){
+  
+    if (state.user) {
+      if (state.user.isAnonymous) {
+        // Guest (NOT "logged" in your sense)
         $userTag.textContent = `Guest · ${state.user.uid.slice(0,8)}…`;
-      }else{
+  
+        // Show Sign in / Sign up button, hide Sign out
+        $authBtn.style.display = "inline-flex";
+        $signOutBtn.style.display = "none";
+      } else {
+        // Logged-in (email/password)
         $userTag.textContent = `${state.user.displayName || "User"} · ${state.user.email || ""}`.trim();
+  
+        // Hide Sign up button, show Sign out
+        $authBtn.style.display = "none";
+        $signOutBtn.style.display = "inline-flex";
       }
-      $authBtn.style.display = "inline-flex";
-      $signOutBtn.style.display = "inline-flex";
-    }else{
+    } else {
+      // Not connected yet
       $userTag.textContent = "Connecting…";
+  
+      // Show Sign up button, hide Sign out
       $authBtn.style.display = "inline-flex";
       $signOutBtn.style.display = "none";
     }
-
+  
     $adminLink.style.display = state.isAdmin ? "inline-flex" : "none";
-
+  
     if(p0 === "login") return showAuthModal();
     if(p0 === "quiz") return renderQuiz();
     if(p0 === "ledger") return renderLedger();
@@ -2507,7 +2519,6 @@
     if(p0 === "compare") return renderCompare();
     return renderHome();
   }
-
   // ---- Boot & Guest auto-signin ----
   async function bootForUser(user){
     state.user = user;
@@ -2540,3 +2551,4 @@
 </script>
 </body>
 </html>
+
