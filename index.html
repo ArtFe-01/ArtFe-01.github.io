@@ -610,6 +610,84 @@
     return state.settings.importanceScale.find(i=>Number(i.key)===Number(n)) || state.settings.importanceScale[2];
   }
 
+  // ===== NEW: Pluri-direction support =====
+  function isValidSectorKey(k){
+    return SECTORS.some(s => s.key === k);
+  }
+
+  // Accepts:
+  // "BLUE"
+  // "BLUE:0.6, PURPLE:0.4"
+  // "BLUE, PURPLE" (weights default to 1)
+  function parseDirectionSpec(spec){
+    const s = String(spec || "").trim();
+    if(!s) return [];
+    const parts = s
+      .split(",")
+      .map(x=>x.trim())
+      .filter(Boolean)
+      .map(tok=>{
+        const [rawKey, rawW] = tok.split(":").map(z=>z.trim());
+        const key = String(rawKey || "").toUpperCase();
+        const w = rawW == null || rawW === "" ? 1 : Number(rawW);
+        return { key, w: Number.isFinite(w) ? w : 1 };
+      })
+      .filter(p=>isValidSectorKey(p.key) && Math.abs(p.w) > 1e-9);
+
+    return parts;
+  }
+
+  // Returns [{key,w}] from either:
+  // - q.directions = [{key:"BLUE", w:0.6}, ...]
+  // - q.direction = "BLUE" or "BLUE:0.6, PURPLE:0.4"
+  // normalize=true => divide by sum(abs(w)) so the question doesn't get stronger just by having more directions
+  function getQuestionDirParts(q, normalize=true){
+    let parts = [];
+
+    if(Array.isArray(q?.directions) && q.directions.length){
+      parts = q.directions
+        .map(d=>{
+          const key = String(d.key ?? d.sectorKey ?? d.dir ?? "").toUpperCase();
+          const w = Number(d.w ?? d.weight ?? 1);
+          return { key, w: Number.isFinite(w) ? w : 1 };
+        })
+        .filter(p=>isValidSectorKey(p.key) && Math.abs(p.w) > 1e-9);
+    }
+
+    if(!parts.length && typeof q?.direction === "string" && q.direction.trim()){
+      parts = parseDirectionSpec(q.direction);
+      if(!parts.length && isValidSectorKey(q.direction.toUpperCase())){
+        parts = [{ key: q.direction.toUpperCase(), w: 1 }];
+      }
+    }
+
+    if(!parts.length) return [];
+    if(!normalize) return parts;
+
+    const sumAbs = parts.reduce((acc,p)=>acc + Math.abs(p.w), 0);
+    if(sumAbs <= 1e-9) return [];
+    return parts.map(p=>({ ...p, w: p.w / sumAbs }));
+  }
+
+  function combinedVecFromParts(parts){
+    let x = 0, y = 0;
+    for(const p of parts){
+      const v = sectorVec(p.key);
+      x += v.x * p.w;
+      y += v.y * p.w;
+    }
+    return { x, y };
+  }
+
+  function formatDirPartsForUI(parts, withNames=true){
+    return (parts || []).map(p=>{
+      const s = SECTORS.find(x=>x.key===p.key);
+      const nm = withNames && s ? `${s.name} (${s.colorName})` : p.key;
+      return `${nm}×${Number(p.w).toFixed(2)}`;
+    }).join(" + ");
+  }
+  // ===== END pluri-direction support =====
+
   function angleDist(a,b){
     let d = Math.abs(a-b);
     if(d > 180) d = 360 - d;
@@ -711,6 +789,7 @@
     };
   }
 
+  // ===== UPDATED computeScore: supports pluri-direction questions =====
   function computeScore(questions, answers){
     const breakdown = [];
     const synergyNotes = [];
@@ -722,6 +801,7 @@
     for(const q of questions){
       const a = answers[q.id];
       if(!a) continue;
+
       const ansDef = getAnswerDef(a.choiceKey);
       if(!ansDef) continue;
 
@@ -729,13 +809,17 @@
       const weight = Number(q.weight ?? 1);
       const w = weight * Number(impDef.mult ?? 1);
 
+      const dirParts = getQuestionDirParts(q, true);
+      if(!dirParts.length) continue;
+
+      const dirVec = combinedVecFromParts(dirParts);
+
       maxSum += Math.abs(w) * 1;
 
-      const vec = sectorVec(q.direction);
       const baseValue = Number(ansDef.value ?? 0);
 
-      const cx = vec.x * baseValue * w;
-      const cy = vec.y * baseValue * w;
+      const cx = dirVec.x * baseValue * w;
+      const cy = dirVec.y * baseValue * w;
       rawX += cx;
       rawY += cy;
 
@@ -754,7 +838,14 @@
       breakdown.push({
         qid: q.id,
         text: q.text,
-        direction: q.direction,
+
+        // compatibility fields:
+        direction: dirParts[0]?.key || (q.direction || ""),
+
+        // new:
+        directions: dirParts,
+        dirText: formatDirPartsForUI(dirParts, true),
+
         tags: Array.isArray(q.tags) ? q.tags : [],
         weight,
         importance: a.importanceKey,
@@ -769,6 +860,7 @@
       });
     }
 
+    // Synergy: apply along the same combined direction vector
     if(state.settings.synergy?.enabled){
       for(const row of breakdown){
         const q = questions.find(qq=>qq.id===row.qid);
@@ -795,9 +887,10 @@
           : Number(state.settings.synergy.ambivalentStrength ?? 0.20);
 
         const inferred = tagStance * strength;
-        const qVec = sectorVec(row.direction);
-        const dx = qVec.x * inferred * row.w;
-        const dy = qVec.y * inferred * row.w;
+
+        const dirVec = combinedVecFromParts(row.directions || getQuestionDirParts(q, true));
+        const dx = dirVec.x * inferred * row.w;
+        const dy = dirVec.y * inferred * row.w;
 
         rawX += dx;
         rawY += dy;
@@ -1025,6 +1118,8 @@
             <div class="spacer"></div>
             <span class="badge warn">Radicalism</span> is distance from center; the grey center is liminal.
             Far out and close to a corner-line can classify as <b>Pure</b> that pole.
+            <div class="spacer"></div>
+            <span class="badge primary">Pluri-direction</span> Questions can push toward multiple colour sectors using weights (e.g. <span class="mono">BLUE:0.6, PURPLE:0.4</span>).
           </div>
           <div class="hr"></div>
           <div class="row">
@@ -1078,7 +1173,7 @@
         <div class="card">
           <h2>Test</h2>
           <div class="smallnote muted">
-            Questions push you toward a <b>colour sector (filter)</b>. Your final point is then classified by pole/sector/slice.
+            Questions push you toward a <b>colour sector (filter)</b> — or a weighted mix of filters. Your final point is then classified by pole/sector/slice.
           </div>
           <div class="hr"></div>
 
@@ -1140,8 +1235,21 @@
       $qList.innerHTML = qs.map((q, idx)=>{
         const a = answers[q.id] || { choiceKey:"N", importanceKey:3 };
         const tags = Array.isArray(q.tags) && q.tags.length ? q.tags : [];
-        const sector = SECTORS.find(s=>s.key===q.direction);
-        const badgeText = sector ? `${sector.name} (${sector.colorName})` : q.direction;
+
+        const partsRaw = getQuestionDirParts(q, false);
+        const partsNorm = getQuestionDirParts(q, true);
+
+        const chips = (partsRaw.length ? partsRaw : partsNorm).map(p=>{
+          const s = SECTORS.find(x=>x.key===p.key);
+          const col = s?.color || "#aaa";
+          const label = s ? `${s.name} (${s.colorName})` : p.key;
+          return `<span class="badge" style="border-color:${hexToRgba(col,.4)}; background:${hexToRgba(col,.12)}; color:#e9eefc">
+            <b style="color:${col}">${htmlEscape(label)}</b>
+            × <span class="mono">${Number(p.w).toFixed(2)}</span>
+          </span>`;
+        }).join(" ");
+
+        const fallback = `<span class="badge">Filter: <b>${htmlEscape(q.direction || "—")}</b></span>`;
 
         return `
           <div class="item">
@@ -1149,7 +1257,8 @@
               <div style="flex:1">
                 <p class="title"><span class="badge primary">Q${idx+1}</span> ${htmlEscape(q.text)}</p>
                 <div class="meta">
-                  <span class="badge">Filter: <b style="color:${sector?.color || 'inherit'}">${htmlEscape(badgeText)}</b></span>
+                  <span class="badge">Filter mix:</span>
+                  ${chips || fallback}
                   <span class="badge">Weight: <span class="mono">${Number(q.weight ?? 1).toFixed(2)}</span></span>
                   ${tags.length ? `<div class="chips" style="margin-top:6px">${tags.map(t=>`<span class="chip">#${htmlEscape(t)}</span>`).join("")}</div>` : ``}
                 </div>
@@ -1324,16 +1433,28 @@
     const synergy = Array.isArray(c.synergyNotes) ? c.synergyNotes : [];
 
     const rows = breakdown.map((r, i)=>{
-      const dir = SECTORS.find(s=>s.key===r.direction);
-      const color = dir?.color || "#bbb";
-      const note = (r.notes && r.notes.length) ? `<div class="smallnote warnText" style="margin-top:6px">${htmlEscape(r.notes.join(" "))}</div>` : "";
-      const dirLabel = dir ? `${dir.name} (${dir.colorName})` : r.direction;
+      const parts = Array.isArray(r.directions) ? r.directions : [];
+      const firstKey = parts[0]?.key || r.direction;
+      const dir0 = SECTORS.find(s=>s.key===firstKey);
+      const color = dir0?.color || "#bbb";
+
+      const dirLabel = parts.length
+        ? formatDirPartsForUI(parts, true)
+        : (r.dirText || (dir0 ? `${dir0.name} (${dir0.colorName})` : (r.direction || "—")));
+
+      const note = (r.notes && r.notes.length)
+        ? `<div class="smallnote warnText" style="margin-top:6px">${htmlEscape(r.notes.join(" "))}</div>`
+        : "";
 
       return `
         <tr>
           <td class="mono">${i+1}</td>
           <td>${htmlEscape(r.text)}</td>
-          <td><span class="badge" style="border-color:${hexToRgba(color,.45)}; background:${hexToRgba(color,.12)}; color:#e9eefc">${htmlEscape(dirLabel)}</span></td>
+          <td>
+            <span class="badge" style="border-color:${hexToRgba(color,.45)}; background:${hexToRgba(color,.12)}; color:#e9eefc">
+              ${htmlEscape(dirLabel)}
+            </span>
+          </td>
           <td>${htmlEscape(r.choiceLabel)} <div class="meta mono">${Number(r.baseValue).toFixed(2)}${r.inferredValue ? ` + ${Number(r.inferredValue).toFixed(2)}(sy)` : ``}</div></td>
           <td class="mono">${Number(r.weight).toFixed(2)} × ${Number(r.w/Number(r.weight||1)).toFixed(2)} (imp)</td>
           <td class="mono">${Number(r.contribX).toFixed(4)}</td>
@@ -1741,8 +1862,6 @@
       return;
     }
 
-    const sectorOpts = SECTORS.map(s=>`<option value="${s.key}">${htmlEscape(s.name)} (${s.colorName})</option>`).join("");
-
     $app.innerHTML = `
       <div class="grid cols2">
         <div class="card">
@@ -1754,16 +1873,15 @@
           <textarea id="s_text" placeholder="Write a statement/question..."></textarea>
           <div class="spacer"></div>
 
-          <div class="split">
-            <div>
-              <label>Filter direction (colour sector)</label>
-              <select id="s_dir">${sectorOpts}</select>
-            </div>
-            <div>
-              <label>Weight</label>
-              <input id="s_weight" type="number" step="0.05" value="1.00" />
-            </div>
+          <label>Filter directions (comma-separated)</label>
+          <input id="s_dirs" placeholder="e.g. BLUE:0.6, PURPLE:0.4" value="BLUE" />
+          <div class="smallnote muted" style="margin-top:6px">
+            Keys: <span class="mono">BLUE, PURPLE, GREEN, RED, REDBROWN, BROWN</span>. Weights are relative; score uses normalized weights.
           </div>
+
+          <div class="spacer"></div>
+          <label>Weight</label>
+          <input id="s_weight" type="number" step="0.05" value="1.00" />
 
           <div class="spacer"></div>
           <label>Tags (comma-separated)</label>
@@ -1791,17 +1909,20 @@
 
     document.getElementById("s_submit").onclick = async ()=>{
       const text = document.getElementById("s_text").value.trim();
-      const direction = document.getElementById("s_dir").value;
+      const dirsSpec = document.getElementById("s_dirs").value.trim();
+      const directions = parseDirectionSpec(dirsSpec);
       const weight = Number(document.getElementById("s_weight").value || 1);
       const tagsRaw = document.getElementById("s_tags").value.trim();
       const tags = tagsRaw ? tagsRaw.split(",").map(t=>t.trim()).filter(Boolean) : [];
 
       if(text.length < 8) return toast("Write a longer question.");
-      if(!SECTORS.some(s=>s.key===direction)) return toast("Pick a valid sector.");
+      if(!directions.length) return toast("Provide at least one valid direction (e.g. BLUE or BLUE:0.6, PURPLE:0.4).");
 
       try{
         await addDoc(collection(db,"suggestions"), {
-          text, direction,
+          text,
+          directions,                  // NEW
+          direction: directions[0].key, // compatibility
           weight: clamp(weight, 0.05, 5),
           tags,
           status: "pending",
@@ -1858,9 +1979,19 @@
 
     async function adminPromoteToQuestion(sug){
       try{
+        const dirs = (Array.isArray(sug.directions) && sug.directions.length)
+          ? sug.directions
+          : (typeof sug.direction === "string" ? parseDirectionSpec(sug.direction) : []);
+
+        if(!dirs.length && typeof sug.direction === "string" && isValidSectorKey(sug.direction.toUpperCase())){
+          dirs.push({ key: sug.direction.toUpperCase(), w: 1 });
+        }
+        if(!dirs.length) return toast("Cannot promote: suggestion has no valid directions.");
+
         await addDoc(collection(db,"questions"), {
           text: sug.text,
-          direction: sug.direction,
+          directions: dirs,             // NEW
+          direction: dirs[0].key,       // compatibility
           weight: Number(sug.weight ?? 1),
           tags: Array.isArray(sug.tags) ? sug.tags : [],
           enabled: true,
@@ -1921,15 +2052,23 @@
       }
 
       $list.innerHTML = out.map(s=>{
-        const sec = SECTORS.find(x=>x.key===s.direction);
-        const col = sec?.color || "#aaa";
-        const tags = Array.isArray(s.tags) ? s.tags : [];
+        const parts = getQuestionDirParts(s, false);
         const mv = myVotes.get(s.id) || 0;
+        const tags = Array.isArray(s.tags) ? s.tags : [];
 
         const statusBadge =
           s.status==="accepted" ? `<span class="badge good">Accepted</span>` :
           s.status==="rejected" ? `<span class="badge bad">Rejected</span>` :
           `<span class="badge warn">Pending</span>`;
+
+        const chips = parts.map(p=>{
+          const sec = SECTORS.find(x=>x.key===p.key);
+          const col = sec?.color || "#aaa";
+          const label = sec ? `${sec.name} (${sec.colorName})` : p.key;
+          return `<span class="badge" style="border-color:${hexToRgba(col,.4)}; background:${hexToRgba(col,.12)}; color:#e9eefc">
+            <b style="color:${col}">${htmlEscape(label)}</b> × <span class="mono">${Number(p.w).toFixed(2)}</span>
+          </span>`;
+        }).join(" ");
 
         return `
           <div class="item">
@@ -1938,9 +2077,8 @@
                 <div class="title">${htmlEscape(s.text)}</div>
                 <div class="meta">
                   ${statusBadge}
-                  <span class="badge" style="border-color:${hexToRgba(col,.4)}; background:${hexToRgba(col,.12)}; color:#e9eefc">
-                    Filter: <b style="color:${col}">${htmlEscape(sec ? `${sec.name} (${sec.colorName})` : s.direction)}</b>
-                  </span>
+                  <span class="badge">Filter mix:</span>
+                  ${chips || `<span class="badge">${htmlEscape(s.direction || "—")}</span>`}
                   <span class="badge">Weight: <span class="mono">${Number(s.weight ?? 1).toFixed(2)}</span></span>
                   <span class="badge primary">Score: <span class="mono">${Number(s.score ?? 0)}</span></span>
                   <span class="badge">Time: ${htmlEscape(fmtTime(s.createdAt))}</span>
@@ -2025,29 +2163,26 @@
       return;
     }
 
-    const sectorOpts = SECTORS.map(s=>`<option value="${s.key}">${htmlEscape(s.name)} (${s.colorName})</option>`).join("");
-
     $app.innerHTML = `
       <div class="grid cols2">
         <div class="card">
           <h2>Questions</h2>
-          <div class="smallnote muted">Add/disable/delete questions. Each question pushes toward a <b>filter (colour sector)</b>.</div>
+          <div class="smallnote muted">Add/disable/delete questions. Each question pushes toward a <b>filter mix</b> (one or more colour sectors).</div>
           <div class="hr"></div>
 
           <label>Question text</label>
           <textarea id="q_text" placeholder="Statement / question..."></textarea>
           <div class="spacer"></div>
 
-          <div class="split">
-            <div>
-              <label>Filter direction (colour sector)</label>
-              <select id="q_dir">${sectorOpts}</select>
-            </div>
-            <div>
-              <label>Weight</label>
-              <input id="q_weight" type="number" step="0.05" value="1.00" />
-            </div>
+          <label>Filter directions (comma-separated)</label>
+          <input id="q_dirs" placeholder="e.g. BLUE:0.6, PURPLE:0.4" value="BLUE" />
+          <div class="smallnote muted" style="margin-top:6px">
+            Keys: <span class="mono">BLUE, PURPLE, GREEN, RED, REDBROWN, BROWN</span>. Weights are relative; score uses normalized weights.
           </div>
+
+          <div class="spacer"></div>
+          <label>Weight</label>
+          <input id="q_weight" type="number" step="0.05" value="1.00" />
 
           <div class="spacer"></div>
           <label>Tags (comma-separated)</label>
@@ -2119,10 +2254,18 @@
 
       const $list = document.getElementById("q_list");
       $list.innerHTML = out.map(q=>{
-        const sec = SECTORS.find(s=>s.key===q.direction);
-        const col = sec?.color || "#aaa";
+        const parts = getQuestionDirParts(q, false);
         const tags = Array.isArray(q.tags) ? q.tags : [];
         const en = q.enabled === true;
+
+        const chips = parts.map(p=>{
+          const sec = SECTORS.find(x=>x.key===p.key);
+          const col = sec?.color || "#aaa";
+          const label = sec ? `${sec.name} (${sec.colorName})` : p.key;
+          return `<span class="badge" style="border-color:${hexToRgba(col,.4)}; background:${hexToRgba(col,.12)}; color:#e9eefc">
+            <b style="color:${col}">${htmlEscape(label)}</b> × <span class="mono">${Number(p.w).toFixed(2)}</span>
+          </span>`;
+        }).join(" ");
 
         return `
           <div class="item">
@@ -2131,9 +2274,8 @@
                 <div class="title">${htmlEscape(q.text)}</div>
                 <div class="meta">
                   ${en ? `<span class="badge good">Enabled</span>` : `<span class="badge bad">Disabled</span>`}
-                  <span class="badge" style="border-color:${hexToRgba(col,.4)}; background:${hexToRgba(col,.12)}; color:#e9eefc">
-                    Filter: <b style="color:${col}">${htmlEscape(sec ? `${sec.name} (${sec.colorName})` : q.direction)}</b>
-                  </span>
+                  <span class="badge">Filter mix:</span>
+                  ${chips || `<span class="badge">${htmlEscape(q.direction || "—")}</span>`}
                   <span class="badge">Weight: <span class="mono">${Number(q.weight ?? 1).toFixed(2)}</span></span>
                   <span class="badge">By: <span class="mono">${htmlEscape(q.createdBy || "—")}</span></span>
                 </div>
@@ -2192,16 +2334,19 @@
 
     document.getElementById("q_add").onclick = async ()=>{
       const text = document.getElementById("q_text").value.trim();
-      const direction = document.getElementById("q_dir").value;
+      const dirsSpec = document.getElementById("q_dirs").value.trim();
+      const directions = parseDirectionSpec(dirsSpec);
       const weight = Number(document.getElementById("q_weight").value || 1);
       const tags = (document.getElementById("q_tags").value || "").split(",").map(t=>t.trim()).filter(Boolean);
 
       if(text.length < 8) return toast("Write a longer question.");
-      if(!SECTORS.some(s=>s.key===direction)) return toast("Invalid sector.");
+      if(!directions.length) return toast("Provide at least one valid direction (e.g. BLUE or BLUE:0.6, PURPLE:0.4).");
 
       try{
         await addDoc(collection(db,"questions"), {
-          text, direction,
+          text,
+          directions,                    // NEW
+          direction: directions[0].key,  // compatibility
           weight: clamp(weight, 0.05, 5),
           tags,
           enabled: true,
@@ -2285,5 +2430,3 @@
 </script>
 </body>
 </html>
-
-
