@@ -381,6 +381,24 @@
       ambivalentStrength: 0.20,
       threshold: 0.25,
     },
+        polarization: {
+      enabled: true,
+
+      // BIG FIX: Neutral/Ambivalent/NA should not shrink you toward the center.
+      // Only questions that produce a non-zero effective value count in the denominator.
+      excludeZeroFromDenominator: true,
+
+      // Treat NA as "no data": no numerator, no denominator, no synergy.
+      treatNAAsMissing: true,
+
+      // Nonlinear amplification of non-neutral answers:
+      // value' = sign(value) * |value|^gamma
+      // gamma < 1 amplifies mid-strength answers (more polarizing)
+      answerCurveGamma: 0.75,
+
+      // Radial spread after scoring: r' = r^gamma (gamma < 1 pushes outward)
+      radialGamma: 0.80,
+    },
     centerRadius: 0.12,
     pureCornerRadius: 0.82,
     purePoleAngleToleranceDeg: 7,
@@ -628,7 +646,20 @@
   function getImportanceDef(n){
     return state.settings.importanceScale.find(i=>Number(i.key)===Number(n)) || state.settings.importanceScale[2];
   }
+    function signPow(v, gamma){
+    const s = Math.sign(v);
+    const a = Math.abs(v);
+    return s * Math.pow(a, gamma);
+  }
 
+  function radialWarp(x, y, gamma){
+    const r = Math.hypot(x, y);
+    if(r < 1e-12) return { x, y };
+    const r2 = Math.min(1, Math.pow(r, gamma)); // gamma < 1 spreads outward (still < 1)
+    const scale = r2 / r;
+    return { x: x * scale, y: y * scale };
+  }
+  
   // ===== Pluri-direction support (hierarchical) + pole-name keys =====
 
   const POLE_COLORS = {
@@ -914,14 +945,22 @@
   }
 
   // ===== computeScore: supports hierarchical pluri-direction questions =====
+  // ===== computeScore: polarizing + no dilution from zero answers =====
   function computeScore(questions, answers){
     const breakdown = [];
     const synergyNotes = [];
     let rawX = 0, rawY = 0;
-    let maxSum = 0;
 
     const tagAgg = new Map();
 
+    const pol = state.settings.polarization || {};
+    const polEnabled = !!pol.enabled;
+    const excludeZeroDenom = (pol.excludeZeroFromDenominator !== false); // default true
+    const treatNAAsMissing = (pol.treatNAAsMissing !== false);           // default true
+    const ansGamma = Number(pol.answerCurveGamma ?? 1);
+    const radialGamma = Number(pol.radialGamma ?? 1);
+
+    // ---- Pass 1: base contributions + tag aggregation ----
     for(const q of questions){
       const a = answers[q.id];
       if(!a) continue;
@@ -929,25 +968,63 @@
       const ansDef = getAnswerDef(a.choiceKey);
       if(!ansDef) continue;
 
+      const special = ansDef.special || null;
+
+      // NA = no data (if enabled)
+      if(treatNAAsMissing && special === "na"){
+        const impDef = getImportanceDef(a.importanceKey);
+        const weight = Number(q.weight ?? 1);
+        const w = weight * Number(impDef.mult ?? 1);
+
+        const dirParts = getQuestionDirParts(q, true);
+        breakdown.push({
+          qid: q.id,
+          text: q.text,
+          direction: dirParts[0]?.key || (q.direction || ""),
+          directions: dirParts,
+          dirText: formatDirPartsForUI(dirParts),
+          tags: Array.isArray(q.tags) ? q.tags : [],
+          weight,
+          importance: a.importanceKey,
+          choiceKey: a.choiceKey,
+          choiceLabel: ansDef.label,
+          special,
+          baseValueRaw: 0,
+          baseValue: 0,
+          inferredValue: 0,
+          w,
+          denomW: 0, // NA contributes no denom
+          contribX: 0,
+          contribY: 0,
+          notes: []
+        });
+        continue;
+      }
+
       const impDef = getImportanceDef(a.importanceKey);
       const weight = Number(q.weight ?? 1);
       const w = weight * Number(impDef.mult ?? 1);
 
       const dirParts = getQuestionDirParts(q, true);
       if(!dirParts.length) continue;
-
       const dirVec2 = combinedVecFromParts(dirParts);
 
-      maxSum += Math.abs(w) * 1;
+      // raw answer value from your answerScale
+      const baseValueRaw = Number(ansDef.value ?? 0);
 
-      const baseValue = Number(ansDef.value ?? 0);
+      // optional polarization curve (amplify mid-strength opinions)
+      let baseValue = baseValueRaw;
+      if(polEnabled && Number.isFinite(ansGamma) && ansGamma !== 1 && Math.abs(baseValue) > 1e-12){
+        baseValue = signPow(baseValue, ansGamma);
+      }
 
       const cx = dirVec2.x * baseValue * w;
       const cy = dirVec2.y * baseValue * w;
       rawX += cx;
       rawY += cy;
 
-      if(Math.abs(baseValue) > 1e-9 && Array.isArray(q.tags)){
+      // tag aggregation uses the same "effective" baseValue used for scoring
+      if(Math.abs(baseValue) > 1e-12 && Array.isArray(q.tags)){
         for(const t of q.tags){
           if(!t) continue;
           const key = String(t).toLowerCase().trim();
@@ -963,7 +1040,7 @@
         qid: q.id,
         text: q.text,
 
-        // compatibility fields:
+        // compatibility:
         direction: dirParts[0]?.key || (q.direction || ""),
 
         // new:
@@ -975,24 +1052,37 @@
         importance: a.importanceKey,
         choiceKey: a.choiceKey,
         choiceLabel: ansDef.label,
-        baseValue,
+        special,
+
+        // transparency:
+        baseValueRaw,
+        baseValue,      // USED value (possibly curved)
         inferredValue: 0,
+
         w,
+        denomW: Math.abs(w),
         contribX: cx,
         contribY: cy,
         notes: []
       });
     }
 
-    // Synergy: apply along the same combined direction vector
+    // ---- Pass 2: Synergy (still only nudges Neutral/Ambivalent) ----
     if(state.settings.synergy?.enabled){
       for(const row of breakdown){
         const q = questions.find(qq=>qq.id===row.qid);
+        if(!q) continue;
+
+        // If NA is treated as missing, it never reaches here (safe anyway)
+        if(treatNAAsMissing && row.special === "na") continue;
+
         const ansDef = getAnswerDef(row.choiceKey);
         const special = ansDef?.special || null;
+
         if(!(special === "neutral" || special === "ambivalent")) continue;
         if(!q?.tags?.length) continue;
 
+        // Average stance over this question's tags
         let sum = 0, cnt = 0;
         for(const t of q.tags){
           const key = String(t).toLowerCase().trim();
@@ -1002,8 +1092,8 @@
           sum += v; cnt++;
         }
         if(!cnt) continue;
-        const tagStance = sum / cnt;
 
+        const tagStance = sum / cnt;
         if(Math.abs(tagStance) < Number(state.settings.synergy.threshold ?? 0.25)) continue;
 
         const strength = (special === "neutral")
@@ -1029,12 +1119,39 @@
       }
     }
 
-    if(maxSum < 1e-9) maxSum = 1;
+    // ---- Denominator: NO MORE DILUTION BY ZERO-ANSWERS ----
+    // effective value = baseValue + inferredValue (synergy)
+    let maxSum = 0;
+    if(excludeZeroDenom){
+      for(const row of breakdown){
+        if(treatNAAsMissing && row.special === "na") continue;
+        const eff = Number(row.baseValue || 0) + Number(row.inferredValue || 0);
+        if(Math.abs(eff) > 1e-12) maxSum += Number(row.denomW || 0);
+      }
+    } else {
+      for(const row of breakdown){
+        if(treatNAAsMissing && row.special === "na") continue;
+        maxSum += Number(row.denomW || 0);
+      }
+    }
+    if(maxSum < 1e-12) maxSum = 1;
+
     let x = rawX / maxSum;
     let y = rawY / maxSum;
 
-    const r = Math.hypot(x,y);
-    if(r > 1){ x /= r; y /= r; }
+    // clamp to unit circle
+    const r0 = Math.hypot(x,y);
+    if(r0 > 1){ x /= r0; y /= r0; }
+
+    // optional radial warp (spreads points outward)
+    if(polEnabled && Number.isFinite(radialGamma) && radialGamma !== 1){
+      const warped = radialWarp(x, y, radialGamma);
+      x = warped.x; y = warped.y;
+
+      // safety clamp again
+      const r1 = Math.hypot(x,y);
+      if(r1 > 1){ x /= r1; y /= r1; }
+    }
 
     const cls = classifyPoint(x,y);
     return { x, y, r: Math.hypot(x,y), classification: cls, breakdown, synergyNotes, maxSum };
@@ -3115,4 +3232,5 @@ Local communities should govern themselves | Libertarian Left | 0.9 | decentrali
 </script>
 </body>
 </html>
+
 
