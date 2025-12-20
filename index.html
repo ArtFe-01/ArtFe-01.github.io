@@ -105,6 +105,12 @@
       outline:none;
       font-size:13px;
     }
+    /* let checkboxes/radios be normal size (your global input width:100% breaks them) */
+    input[type="checkbox"], input[type="radio"]{
+      width:auto;
+      padding:0;
+      border-radius:6px;
+    }
     /* Fix: on some PCs the dropdown list renders with a light system background, so force option colors */
     select option, select optgroup{
       background: var(--panel);
@@ -247,7 +253,7 @@
   import {
     getFirestore, doc, getDoc, setDoc, updateDoc, addDoc, deleteDoc,
     collection, query, where, orderBy, limit, getDocs,
-    serverTimestamp, runTransaction, increment
+    serverTimestamp, runTransaction, increment, writeBatch
   } from "https://www.gstatic.com/firebasejs/12.7.0/firebase-firestore.js";
 
   // ---- Firebase config (yours) ----
@@ -2250,240 +2256,547 @@
   }
 
   async function renderAdmin(){
-    if(!state.user){
-      $app.innerHTML = `<div class="card"><h2>Admin</h2><div class="smallnote muted">Connecting…</div></div>`;
-      return;
-    }
-    if(isGuest()){
-      $app.innerHTML = `
-        <div class="card">
-          <h2>Admin</h2>
-          <div class="smallnote muted">
-            Admin requires a non-Guest account.
-            <div class="spacer"></div>
-            <button class="btn good" type="button" onclick="location.hash='#/login'">Sign in / Upgrade</button>
-          </div>
-        </div>
-      `;
-      return;
-    }
-    if(!state.isAdmin){
-      $app.innerHTML = `
-        <div class="card">
-          <h2>Admin</h2>
-          <div class="smallnote muted">
-            Access denied. To become admin, create Firestore doc:
-            <div class="spacer"></div>
-            <div class="mono">admins/${htmlEscape(state.user.uid)}</div>
-          </div>
-        </div>
-      `;
-      return;
-    }
-
+  if(!state.user){
+    $app.innerHTML = `<div class="card"><h2>Admin</h2><div class="smallnote muted">Connecting…</div></div>`;
+    return;
+  }
+  if(isGuest()){
     $app.innerHTML = `
-      <div class="grid cols2">
-        <div class="card">
-          <h2>Questions</h2>
-          <div class="smallnote muted">Add/disable/delete questions. Each question pushes toward a <b>direction mix</b> (one or more poles, hierarchical by default).</div>
-          <div class="hr"></div>
-
-          <label>Question text</label>
-          <textarea id="q_text" placeholder="Statement / question..."></textarea>
+      <div class="card">
+        <h2>Admin</h2>
+        <div class="smallnote muted">
+          Admin requires a non-Guest account.
           <div class="spacer"></div>
-
-          <label>Directions (comma-separated, hierarchical)</label>
-          <input id="q_dirs" placeholder="e.g. Right-wing, Centrist, Left-wing" value="Right-wing" />
-          <div class="smallnote muted" style="margin-top:6px">
-            Keys: <span class="mono">Right-wing, Centrist, Left-wing, Syncretic, Reactionary, Third-Position</span>.
-            Use <span class="mono">></span> for hierarchy, or add explicit weights like <span class="mono">Right-wing:0.6, Centrist:0.4</span>.
-          </div>
-
-          <div class="spacer"></div>
-          <label>Weight</label>
-          <input id="q_weight" type="number" step="0.05" value="1.00" />
-
-          <div class="spacer"></div>
-          <label>Tags (comma-separated)</label>
-          <input id="q_tags" placeholder="e.g. economy, nationalism, religion, lgbtq, authority" />
-          <div class="spacer"></div>
-
-          <div class="row">
-            <button id="q_add" class="btn good" type="button">Add question</button>
-            <button id="q_refresh" class="btn" type="button">Refresh list</button>
-          </div>
-
-          <div class="hr"></div>
-          <div id="q_list" class="list"></div>
-        </div>
-
-        <div class="card">
-          <h2>Scoring settings</h2>
-          <div class="smallnote muted">Admin can modify answer values, importance multipliers, synergy parameters, pole tolerance, etc. (JSON).</div>
-          <div class="hr"></div>
-
-          <label>settings/scoring (JSON)</label>
-          <textarea id="set_json" class="mono" spellcheck="false"></textarea>
-          <div class="spacer"></div>
-          <div class="row">
-            <button id="set_save" class="btn good" type="button">Save settings</button>
-            <button id="set_reset" class="btn danger" type="button">Reset to defaults (local)</button>
-            <button id="set_reload" class="btn" type="button">Reload from Firestore</button>
-          </div>
-          <div class="spacer"></div>
-          <div class="smallnote muted">Each attempt stores a snapshot of settings so old results remain explainable.</div>
+          <button class="btn good" type="button" onclick="location.hash='#/login'">Sign in / Upgrade</button>
         </div>
       </div>
     `;
+    return;
+  }
+  if(!state.isAdmin){
+    $app.innerHTML = `
+      <div class="card">
+        <h2>Admin</h2>
+        <div class="smallnote muted">
+          Access denied. To become admin, create Firestore doc:
+          <div class="spacer"></div>
+          <div class="mono">admins/${htmlEscape(state.user.uid)}</div>
+        </div>
+      </div>
+    `;
+    return;
+  }
 
+  $app.innerHTML = `
+    <div class="grid cols2">
+      <div class="card">
+        <h2>Questions</h2>
+        <div class="smallnote muted">
+          Add/disable/delete questions. Supports <b>select + batch actions</b>, <b>edit</b>, and <b>bulk add</b>.
+        </div>
+        <div class="hr"></div>
+
+        <div class="row">
+          <button id="q_selectAll" class="btn small" type="button">Select all</button>
+          <button id="q_clearSel" class="btn small" type="button">Clear</button>
+          <span id="q_selCount" class="badge">Selected: 0</span>
+
+          <button id="q_enableSel" class="btn small good" type="button" disabled>Enable selected</button>
+          <button id="q_disableSel" class="btn small warn" type="button" disabled>Disable selected</button>
+          <button id="q_deleteSel" class="btn small danger" type="button" disabled>Delete selected</button>
+        </div>
+
+        <div class="hr"></div>
+
+        <div id="q_editBadge" class="smallnote muted">Mode: <b>Add</b></div>
+        <div class="spacer"></div>
+
+        <label>Question text</label>
+        <textarea id="q_text" placeholder="Statement / question..."></textarea>
+        <div class="spacer"></div>
+
+        <label>Directions (comma-separated, hierarchical)</label>
+        <input id="q_dirs" placeholder="e.g. Right-wing, Centrist, Left-wing" value="Right-wing" />
+        <div class="smallnote muted" style="margin-top:6px">
+          Keys: <span class="mono">Right-wing, Centrist, Left-wing, Syncretic, Reactionary, Third-Position</span>.
+          Use <span class="mono">></span> for hierarchy, or weights like <span class="mono">Right-wing:0.6, Centrist:0.4</span>.
+        </div>
+
+        <div class="spacer"></div>
+        <label>Weight</label>
+        <input id="q_weight" type="number" step="0.05" value="1.00" />
+
+        <div class="spacer"></div>
+        <label>Tags (comma-separated)</label>
+        <input id="q_tags" placeholder="e.g. economy, nationalism, religion, authority" />
+        <div class="spacer"></div>
+
+        <div class="row">
+          <button id="q_save" class="btn good" type="button">Add question</button>
+          <button id="q_cancelEdit" class="btn" type="button" style="display:none;">Cancel edit</button>
+          <button id="q_refresh" class="btn" type="button">Refresh list</button>
+        </div>
+
+        <div class="hr"></div>
+
+        <h2 style="margin-top:0">Bulk add</h2>
+        <div class="smallnote muted">
+          One question per line. Format:<br/>
+          <span class="mono">Text | Directions | Weight | tags,comma,separated</span><br/>
+          If Directions/Weight/Tags are omitted, defaults above are used.
+        </div>
+        <div class="spacer"></div>
+
+        <textarea id="q_bulk" class="mono" placeholder="Example:
+The state should control key industries | Statist Left | 1.2 | economy,authority
+Local communities should govern themselves | Libertarian Left | 0.9 | decentralization
+"></textarea>
+
+        <div class="spacer"></div>
+        <div class="row">
+          <button id="q_bulkAdd" class="btn primary" type="button">Add bulk questions</button>
+        </div>
+
+        <div class="hr"></div>
+        <div id="q_list" class="list"></div>
+      </div>
+
+      <div class="card">
+        <h2>Scoring settings</h2>
+        <div class="smallnote muted">
+          Admin can modify answer values, importance multipliers, synergy parameters, pole tolerance, etc. (JSON).
+        </div>
+        <div class="hr"></div>
+
+        <label>settings/scoring (JSON)</label>
+        <textarea id="set_json" class="mono" spellcheck="false"></textarea>
+        <div class="spacer"></div>
+        <div class="row">
+          <button id="set_save" class="btn good" type="button">Save settings</button>
+          <button id="set_reset" class="btn danger" type="button">Reset to defaults (local)</button>
+          <button id="set_reload" class="btn" type="button">Reload from Firestore</button>
+        </div>
+        <div class="spacer"></div>
+        <div class="smallnote muted">
+          Each attempt stores a snapshot of settings so old results remain explainable.
+        </div>
+      </div>
+    </div>
+  `;
+
+  // ----- Settings panel wiring -----
+  document.getElementById("set_json").value = JSON.stringify(state.settings, null, 2);
+
+  document.getElementById("set_reset").onclick = ()=>{
+    document.getElementById("set_json").value = JSON.stringify(DEFAULT_SETTINGS, null, 2);
+    toast("Reset editor to defaults (not saved yet).");
+  };
+
+  document.getElementById("set_reload").onclick = async ()=>{
+    await loadSettings();
     document.getElementById("set_json").value = JSON.stringify(state.settings, null, 2);
+    toast("Reloaded from Firestore.");
+  };
 
-    document.getElementById("set_reset").onclick = ()=>{
-      document.getElementById("set_json").value = JSON.stringify(DEFAULT_SETTINGS, null, 2);
-      toast("Reset editor to defaults (not saved yet).");
-    };
-
-    document.getElementById("set_reload").onclick = async ()=>{
+  document.getElementById("set_save").onclick = async ()=>{
+    try{
+      const obj = JSON.parse(document.getElementById("set_json").value);
+      await setDoc(doc(db,"settings","scoring"), obj, { merge:false });
       await loadSettings();
-      document.getElementById("set_json").value = JSON.stringify(state.settings, null, 2);
-      toast("Reloaded from Firestore.");
+      toast("Settings saved.");
+    }catch(e){
+      toast("Save failed: " + (e?.message || e));
+    }
+  };
+
+  // ===== Questions: select + batch + edit + bulk =====
+  let editingId = null;
+  const selected = new Set();
+
+  const $selCount = document.getElementById("q_selCount");
+  const $btnEnableSel = document.getElementById("q_enableSel");
+  const $btnDisableSel = document.getElementById("q_disableSel");
+  const $btnDeleteSel = document.getElementById("q_deleteSel");
+  const $editBadge = document.getElementById("q_editBadge");
+  const $btnSave = document.getElementById("q_save");
+  const $btnCancelEdit = document.getElementById("q_cancelEdit");
+
+  function syncSelectionUI(){
+    $selCount.textContent = `Selected: ${selected.size}`;
+    const on = selected.size > 0;
+    $btnEnableSel.disabled = !on;
+    $btnDisableSel.disabled = !on;
+    $btnDeleteSel.disabled = !on;
+  }
+
+  function setEditMode(q){
+    if(q){
+      editingId = q.id;
+
+      document.getElementById("q_text").value = q.text || "";
+      const dirs = (Array.isArray(q.directions) && q.directions.length)
+        ? q.directions.map(d => `${d.key}${(d.w!=null)?`:${d.w}`:""}`).join(", ")
+        : (q.direction || "Right-wing");
+      document.getElementById("q_dirs").value = dirs;
+
+      document.getElementById("q_weight").value = Number(q.weight ?? 1).toFixed(2);
+      document.getElementById("q_tags").value = Array.isArray(q.tags) ? q.tags.join(", ") : "";
+
+      $editBadge.innerHTML = `Mode: <b>Edit</b> <span class="badge warn">ID: <span class="mono">${htmlEscape(q.id)}</span></span>`;
+      $btnSave.textContent = "Save changes";
+      $btnCancelEdit.style.display = "inline-flex";
+    } else {
+      editingId = null;
+
+      $editBadge.innerHTML = `Mode: <b>Add</b>`;
+      $btnSave.textContent = "Add question";
+      $btnCancelEdit.style.display = "none";
+
+      document.getElementById("q_text").value = "";
+      document.getElementById("q_tags").value = "";
+      // keep dirs + weight as the admin's preferred defaults
+    }
+  }
+
+  function readQuestionForm(){
+    const text = document.getElementById("q_text").value.trim();
+    const dirsSpec = document.getElementById("q_dirs").value.trim();
+    const directions = parseDirectionSpec(dirsSpec);
+    const weight = Number(document.getElementById("q_weight").value || 1);
+    const tags = (document.getElementById("q_tags").value || "")
+      .split(",").map(t=>t.trim()).filter(Boolean);
+
+    if(text.length < 8) { toast("Write a longer question."); return null; }
+    if(!directions.length) { toast("Provide at least one valid direction."); return null; }
+
+    return {
+      text,
+      directions,
+      direction: directions[0].key, // compatibility
+      weight: clamp(weight, 0.05, 5),
+      tags
     };
+  }
 
-    document.getElementById("set_save").onclick = async ()=>{
-      try{
-        const obj = JSON.parse(document.getElementById("set_json").value);
-        await setDoc(doc(db,"settings","scoring"), obj, { merge:false });
-        await loadSettings();
-        toast("Settings saved.");
-      }catch(e){
-        toast("Save failed: " + (e?.message || e));
-      }
-    };
+  function parseBulk(text, defaults){
+    const lines = String(text || "")
+      .split(/\r?\n/)
+      .map(l=>l.trim())
+      .filter(l=>l && !l.startsWith("#"));
 
-    async function refreshQuestionList(){
-      const out = [];
-      try{
-        const snap = await getDocs(query(collection(db,"questions"), orderBy("createdAt","desc"), limit(200)));
-        snap.forEach(d=> out.push({ id:d.id, ...d.data() }));
-      }catch{
-        const snap = await getDocs(collection(db,"questions"));
-        snap.forEach(d=> out.push({ id:d.id, ...d.data() }));
-        out.sort((a,b)=> (b.createdAt?.seconds||0)-(a.createdAt?.seconds||0));
-      }
+    const items = [];
+    const errors = [];
 
-      const $list = document.getElementById("q_list");
-      $list.innerHTML = out.map(q=>{
-        const parts = getQuestionDirParts(q, false);
-        const tags = Array.isArray(q.tags) ? q.tags : [];
-        const en = q.enabled === true;
+    for(let i=0;i<lines.length;i++){
+      const line = lines[i];
 
-        const chips = parts.map(p=>{
-          const d = dirDisplay(p.key);
-          const col = d.color || "#aaa";
-          const label = d.label || p.key;
-          return `<span class="badge" style="border-color:${hexToRgba(col,.4)}; background:${hexToRgba(col,.12)}; color:#e9eefc">
-            <b style="color:${col}">${htmlEscape(label)}</b> × <span class="mono">${Number(p.w).toFixed(2)}</span>
-          </span>`;
-        }).join(" ");
+      // recommended: Text | Directions | Weight | tags
+      const parts = line.split("|").map(p=>p.trim());
+      const qText = parts[0] || "";
+      const dirsSpec = (parts[1] || defaults.dirsSpec || "").trim();
+      const weightRaw = (parts[2] || "").trim();
+      const tagsRaw = (parts[3] || "").trim();
 
-        return `
-          <div class="item">
-            <div class="top">
-              <div style="flex:1">
-                <div class="title">${htmlEscape(q.text)}</div>
-                <div class="meta">
-                  ${en ? `<span class="badge good">Enabled</span>` : `<span class="badge bad">Disabled</span>`}
-                  <span class="badge">Direction mix:</span>
-                  ${chips || `<span class="badge">${htmlEscape(q.direction || "—")}</span>`}
-                  <span class="badge">Weight: <span class="mono">${Number(q.weight ?? 1).toFixed(2)}</span></span>
-                  <span class="badge">By: <span class="mono">${htmlEscape(q.createdBy || "—")}</span></span>
-                </div>
-                ${tags.length ? `<div class="chips" style="margin-top:6px">${tags.map(t=>`<span class="chip">#${htmlEscape(t)}</span>`).join("")}</div>` : ``}
-              </div>
-              <div class="row">
-                <button class="btn small ${en?'danger':'good'}" data-qtoggle="${q.id}" type="button">
-                  ${en ? "Disable" : "Enable"}
-                </button>
-                <button class="btn small danger" data-qdelete="${q.id}" type="button">
-                  Delete
-                </button>
-              </div>
-            </div>
-          </div>
-        `;
-      }).join("");
+      const directions = parseDirectionSpec(dirsSpec);
 
-      $list.querySelectorAll("[data-qtoggle]").forEach(btn=>{
-        btn.onclick = async ()=>{
-          const id = btn.getAttribute("data-qtoggle");
-          const cur = out.find(x=>x.id===id);
-          if(!cur) return;
-          try{
-            await updateDoc(doc(db,"questions", id), { enabled: !(cur.enabled===true) });
-            toast("Updated.");
-            await loadQuestions();
-            await refreshQuestionList();
-          }catch(e){
-            toast("Failed: " + (e?.message || e));
-          }
-        };
-      });
+      if(qText.length < 8) { errors.push(`Line ${i+1}: text too short`); continue; }
+      if(!directions.length) { errors.push(`Line ${i+1}: invalid directions`); continue; }
 
-      $list.querySelectorAll("[data-qdelete]").forEach(btn=>{
-        btn.onclick = async ()=>{
-          const id = btn.getAttribute("data-qdelete");
-          const cur = out.find(x=>x.id===id);
-          if(!cur) return;
+      const weight = clamp(
+        Number(weightRaw || defaults.weight || 1),
+        0.05,
+        5
+      );
 
-          if(!confirm("Delete this question permanently?")) return;
+      const tags = tagsRaw
+        ? tagsRaw.split(",").map(t=>t.trim()).filter(Boolean)
+        : (defaults.tags || []);
 
-          try{
-            await deleteDoc(doc(db,"questions", id));
-            toast("Deleted.");
-            await loadQuestions();
-            await refreshQuestionList();
-          }catch(e){
-            toast("Delete failed: " + (e?.message || e));
-          }
-        };
+      items.push({
+        text: qText,
+        directions,
+        direction: directions[0].key, // compatibility
+        weight,
+        tags,
       });
     }
 
-    document.getElementById("q_refresh").onclick = refreshQuestionList;
+    return { items, errors };
+  }
 
-    document.getElementById("q_add").onclick = async ()=>{
-      const text = document.getElementById("q_text").value.trim();
-      const dirsSpec = document.getElementById("q_dirs").value.trim();
-      const directions = parseDirectionSpec(dirsSpec);
-      const weight = Number(document.getElementById("q_weight").value || 1);
-      const tags = (document.getElementById("q_tags").value || "").split(",").map(t=>t.trim()).filter(Boolean);
+  // A safe “batch” runner:
+  // - Uses writeBatch if available (faster, atomic-ish),
+  // - Otherwise falls back to sequential updates (works even if you didn't import writeBatch).
+  async function runBatch(ops){
+    const hasWriteBatch = (typeof writeBatch === "function");
+    if(hasWriteBatch && ops.length <= 450){
+      const b = writeBatch(db);
+      for(const op of ops){
+        if(op.type === "set") b.set(op.ref, op.data);
+        else if(op.type === "update") b.update(op.ref, op.data);
+        else if(op.type === "delete") b.delete(op.ref);
+      }
+      await b.commit();
+      return;
+    }
 
-      if(text.length < 8) return toast("Write a longer question.");
-      if(!directions.length) return toast("Provide at least one valid direction (e.g. Right-wing or Right-wing:0.6, Centrist:0.4).");
+    // fallback: sequential (safe, slower)
+    for(const op of ops){
+      if(op.type === "set") await setDoc(op.ref, op.data);
+      else if(op.type === "update") await updateDoc(op.ref, op.data);
+      else if(op.type === "delete") await deleteDoc(op.ref);
+    }
+  }
 
-      try{
+  async function refreshQuestionList(){
+    const out = [];
+    try{
+      const snap = await getDocs(query(collection(db,"questions"), orderBy("createdAt","desc"), limit(400)));
+      snap.forEach(d=> out.push({ id:d.id, ...d.data() }));
+    }catch{
+      const snap = await getDocs(collection(db,"questions"));
+      snap.forEach(d=> out.push({ id:d.id, ...d.data() }));
+      out.sort((a,b)=> (b.createdAt?.seconds||0)-(a.createdAt?.seconds||0));
+    }
+
+    const $list = document.getElementById("q_list");
+    $list.innerHTML = out.map(q=>{
+      const parts = getQuestionDirParts(q, false);
+      const tags = Array.isArray(q.tags) ? q.tags : [];
+      const en = q.enabled === true;
+      const isSel = selected.has(q.id);
+
+      const chips = parts.map(p=>{
+        const d = dirDisplay(p.key);
+        const col = d.color || "#aaa";
+        const label = d.label || p.key;
+        return `<span class="badge" style="border-color:${hexToRgba(col,.4)}; background:${hexToRgba(col,.12)}; color:#e9eefc">
+          <b style="color:${col}">${htmlEscape(label)}</b> × <span class="mono">${Number(p.w).toFixed(2)}</span>
+        </span>`;
+      }).join(" ");
+
+      return `
+        <div class="item">
+          <div class="top">
+            <div style="flex:1">
+              <div class="row" style="justify-content:space-between; align-items:flex-start;">
+                <div class="title">${htmlEscape(q.text)}</div>
+                <label class="badge" style="cursor:pointer;">
+                  <input type="checkbox" data-qsel="${q.id}" ${isSel ? "checked":""} style="width:auto" />
+                  Select
+                </label>
+              </div>
+
+              <div class="meta">
+                ${en ? `<span class="badge good">Enabled</span>` : `<span class="badge bad">Disabled</span>`}
+                <span class="badge">Direction mix:</span>
+                ${chips || `<span class="badge">${htmlEscape(q.direction || "—")}</span>`}
+                <span class="badge">Weight: <span class="mono">${Number(q.weight ?? 1).toFixed(2)}</span></span>
+                ${tags.length ? `<span class="badge">Tags: ${htmlEscape(tags.join(", "))}</span>` : ``}
+              </div>
+            </div>
+
+            <div class="row">
+              <button class="btn small" data-qedit="${q.id}" type="button">Edit</button>
+              <button class="btn small ${en?'danger':'good'}" data-qtoggle="${q.id}" type="button">
+                ${en ? "Disable" : "Enable"}
+              </button>
+              <button class="btn small danger" data-qdelete="${q.id}" type="button">Delete</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }).join("");
+
+    // selection toggles
+    $list.querySelectorAll("input[type='checkbox'][data-qsel]").forEach(cb=>{
+      cb.addEventListener("change", ()=>{
+        const id = cb.getAttribute("data-qsel");
+        if(cb.checked) selected.add(id);
+        else selected.delete(id);
+        syncSelectionUI();
+      });
+    });
+
+    // edit
+    $list.querySelectorAll("[data-qedit]").forEach(btn=>{
+      btn.onclick = ()=>{
+        const id = btn.getAttribute("data-qedit");
+        const q = out.find(x=>x.id===id);
+        if(q) setEditMode(q);
+      };
+    });
+
+    // enable/disable single
+    $list.querySelectorAll("[data-qtoggle]").forEach(btn=>{
+      btn.onclick = async ()=>{
+        const id = btn.getAttribute("data-qtoggle");
+        const cur = out.find(x=>x.id===id);
+        if(!cur) return;
+        try{
+          await updateDoc(doc(db,"questions", id), { enabled: !(cur.enabled===true) });
+          toast("Updated.");
+          await loadQuestions();
+          await refreshQuestionList();
+        }catch(e){
+          toast("Failed: " + (e?.message || e));
+        }
+      };
+    });
+
+    // delete single
+    $list.querySelectorAll("[data-qdelete]").forEach(btn=>{
+      btn.onclick = async ()=>{
+        const id = btn.getAttribute("data-qdelete");
+        if(!confirm("Delete this question permanently?")) return;
+        try{
+          await deleteDoc(doc(db,"questions", id));
+          selected.delete(id);
+          syncSelectionUI();
+          toast("Deleted.");
+          await loadQuestions();
+          await refreshQuestionList();
+        }catch(e){
+          toast("Delete failed: " + (e?.message || e));
+        }
+      };
+    });
+
+    syncSelectionUI();
+  }
+
+  document.getElementById("q_refresh").onclick = refreshQuestionList;
+
+  document.getElementById("q_selectAll").onclick = ()=>{
+    document.querySelectorAll("#q_list input[type='checkbox'][data-qsel]").forEach(cb=>{
+      cb.checked = true;
+      selected.add(cb.getAttribute("data-qsel"));
+    });
+    syncSelectionUI();
+  };
+
+  document.getElementById("q_clearSel").onclick = ()=>{
+    selected.clear();
+    document.querySelectorAll("#q_list input[type='checkbox'][data-qsel]").forEach(cb=> cb.checked = false);
+    syncSelectionUI();
+  };
+
+  $btnCancelEdit.onclick = ()=> setEditMode(null);
+
+  // add OR save edit
+  $btnSave.onclick = async ()=>{
+    const data = readQuestionForm();
+    if(!data) return;
+
+    try{
+      if(editingId){
+        await updateDoc(doc(db,"questions", editingId), data);
+        toast("Question updated.");
+      }else{
         await addDoc(collection(db,"questions"), {
-          text,
-          directions,                    // NEW
-          direction: directions[0].key,  // compatibility
-          weight: clamp(weight, 0.05, 5),
-          tags,
+          ...data,
           enabled: true,
           createdBy: state.user.uid,
           createdAt: serverTimestamp()
         });
         toast("Question added.");
-        document.getElementById("q_text").value = "";
-        document.getElementById("q_tags").value = "";
-        await loadQuestions();
-        await refreshQuestionList();
-      }catch(e){
-        toast("Failed: " + (e?.message || e));
       }
+
+      setEditMode(null);
+      await loadQuestions();
+      await refreshQuestionList();
+    }catch(e){
+      toast("Failed: " + (e?.message || e));
+    }
+  };
+
+  async function batchUpdateSelected(patchOrDelete, confirmMsg){
+    if(!selected.size) return;
+
+    const ids = Array.from(selected);
+    if(ids.length > 450){
+      toast("Too many selected at once. Keep it under ~450.");
+      return;
+    }
+
+    if(confirmMsg && !confirm(confirmMsg.replace("{n}", String(ids.length)))) return;
+
+    try{
+      const ops = [];
+      for(const id of ids){
+        const ref = doc(db, "questions", id);
+        if(patchOrDelete === "__DELETE__") ops.push({ type:"delete", ref });
+        else ops.push({ type:"update", ref, data: patchOrDelete });
+      }
+
+      await runBatch(ops);
+
+      if(patchOrDelete === "__DELETE__") selected.clear();
+      toast("Batch operation done.");
+      await loadQuestions();
+      await refreshQuestionList();
+    }catch(e){
+      toast("Batch failed: " + (e?.message || e));
+    }
+  }
+
+  $btnEnableSel.onclick  = ()=> batchUpdateSelected({ enabled:true },  "Enable {n} selected questions?");
+  $btnDisableSel.onclick = ()=> batchUpdateSelected({ enabled:false }, "Disable {n} selected questions?");
+  $btnDeleteSel.onclick  = ()=> batchUpdateSelected("__DELETE__",      "DELETE {n} selected questions permanently?");
+
+  // bulk add
+  document.getElementById("q_bulkAdd").onclick = async ()=>{
+    const bulkText = document.getElementById("q_bulk").value;
+
+    const defaults = {
+      dirsSpec: document.getElementById("q_dirs").value.trim(),
+      weight: Number(document.getElementById("q_weight").value || 1),
+      tags: (document.getElementById("q_tags").value || "")
+        .split(",").map(t=>t.trim()).filter(Boolean),
     };
 
-    await refreshQuestionList();
-  }
+    const { items, errors } = parseBulk(bulkText, defaults);
+
+    if(errors.length){
+      console.warn("Bulk add skipped lines:", errors);
+      toast(`Bulk: ${items.length} ok, ${errors.length} skipped (see console).`);
+    }
+    if(!items.length) return toast("No valid bulk lines found.");
+    if(items.length > 450) return toast("Too many bulk lines. Keep it under ~450.");
+
+    try{
+      const ops = [];
+      for(const q of items){
+        const ref = doc(collection(db,"questions")); // auto-id
+        ops.push({
+          type: "set",
+          ref,
+          data: {
+            ...q,
+            enabled: true,
+            createdBy: state.user.uid,
+            createdAt: serverTimestamp()
+          }
+        });
+      }
+
+      await runBatch(ops);
+
+      toast(`Added ${items.length} questions.`);
+      document.getElementById("q_bulk").value = "";
+      await loadQuestions();
+      await refreshQuestionList();
+    }catch(e){
+      toast("Bulk add failed: " + (e?.message || e));
+    }
+  };
+
+  // initial load
+  setEditMode(null);
+  syncSelectionUI();
+  await refreshQuestionList();
+}
+
 
   // ---- Router render ----
   async function render(){
@@ -2553,6 +2866,3 @@
 </script>
 </body>
 </html>
-
-
-
