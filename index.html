@@ -308,7 +308,7 @@
     { key:"REDBROWN", colorName:"Red-Brown", name:"Revolutionary ThirdPos",   color:getCSS("--redbrown"), angleDeg: 120 },
   ];
 
-  const GREY = { key:"GREY", name:"Grey (Center)", color:getCSS("--grey") };
+  const GREY = { key:"GREY", name:"Apoliticism / Pragmatism", color:getCSS("--grey") };
 
   // Sector ranges in [0,360), defined by corner/pole boundaries.
   // IMPORTANT: Blue wraps (330 -> 30).
@@ -673,8 +673,8 @@
   function isValidDirKey(k){
     const kk = normalizeDirKey(k);
     if(!kk) return false;
-    if(kk === "GREY") return true;
-    return POLES.some(p => p.key === kk) || SECTORS.some(s => s.key === kk);
+    if(kk === "GREY"){
+    return { label:"Apoliticism / Pragmatism", color:getCSS("--grey"), kind:"GREY", key:"GREY" };
   }
 
   function dirVec(key){
@@ -699,9 +699,8 @@
     const kk = normalizeDirKey(key);
 
     if(kk === "GREY"){
-      return { label:"Grey (Center)", color:getCSS("--grey"), kind:"GREY", key:"GREY" };
-    }
-
+    return { label:"Apoliticism / Pragmatism", color:getCSS("--grey"), kind:"GREY", key:"GREY" };
+  }
     const pole = POLES.find(p => p.key === kk);
     if(pole){
       return {
@@ -856,7 +855,7 @@
         betweenPoles: "Grey Center",
         radicalism:0,
         angle360:0,
-        label:"Grey (Center) — Liminal"
+        label:"Apoliticism / Pragmatism — Liminal"
       };
     }
 
@@ -1203,7 +1202,7 @@
     ctx.fillStyle = "rgba(233,238,252,.70)";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText("Grey", cx, cy);
+    ctx.fillText("Apoliticism/Pragmatism", cx, cy);
 
     // points
     for(const p of points || []){
