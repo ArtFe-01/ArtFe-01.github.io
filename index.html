@@ -552,41 +552,29 @@
   }
 
     async function loadQuestions(){
-    const qs = [];
-  
-    // Primary (preferred): enabled==true + ordered by createdAt
-    try{
-      const qref = query(
-        collection(db, "questions"),
-        where("enabled","==", true),
-        orderBy("createdAt","asc"),
-        limit(500)
-      );
-      const snap = await getDocs(qref);
-      snap.forEach(d => qs.push({ id: d.id, ...d.data() }));
-    }catch(e){
-      console.error("loadQuestions primary query failed:", e);
-      toast(`Questions query failed: ${e?.code || e?.message || e}`);
-  
-      // Fallback (guest-safe): still filters enabled==true, no orderBy (avoids composite index)
-      try{
-        const snap2 = await getDocs(query(
-          collection(db, "questions"),
-          where("enabled","==", true),
-          limit(500)
-        ));
-        snap2.forEach(d => qs.push({ id: d.id, ...d.data() }));
-  
-        // Client-side sort to keep consistent order
-        qs.sort((a,b) => (a.createdAt?.seconds || 0) - (b.createdAt?.seconds || 0));
-      }catch(e2){
-        console.error("loadQuestions fallback query failed:", e2);
-        toast(`Questions fallback failed: ${e2?.code || e2?.message || e2}`);
-      }
+  const qs = [];
+  try{
+    const qref = query(
+      collection(db, "questions"),
+      where("enabled","==", true),
+      orderBy("createdAt","asc"),
+      limit(500)
+    );
+    const snap = await getDocs(qref);
+    snap.forEach(d => qs.push({ id: d.id, ...d.data() }));
+  }catch(e){
+    console.error("loadQuestions failed:", e);
+
+    // If you *still* see failed-precondition here, the index isn't built/enabled yet.
+    const code = e?.code || "";
+    if(code !== "failed-precondition"){
+      toast(`Failed to load questions: ${code || e?.message || e}`);
     }
-  
-    state.questions = qs;
   }
+
+  state.questions = qs;
+}
+
 
 
   async function checkAdmin(uid){
@@ -2554,4 +2542,5 @@
 </script>
 </body>
 </html>
+
 
