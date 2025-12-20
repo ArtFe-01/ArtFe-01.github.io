@@ -551,8 +551,10 @@
     }
   }
 
-  async function loadQuestions(){
+    async function loadQuestions(){
     const qs = [];
+  
+    // Primary (preferred): enabled==true + ordered by createdAt
     try{
       const qref = query(
         collection(db, "questions"),
@@ -561,19 +563,31 @@
         limit(500)
       );
       const snap = await getDocs(qref);
-      snap.forEach(d=> qs.push({ id:d.id, ...d.data() }));
-    }catch{
+      snap.forEach(d => qs.push({ id: d.id, ...d.data() }));
+    }catch(e){
+      console.error("loadQuestions primary query failed:", e);
+      toast(`Questions query failed: ${e?.code || e?.message || e}`);
+  
+      // Fallback (guest-safe): still filters enabled==true, no orderBy (avoids composite index)
       try{
-        const snap = await getDocs(collection(db, "questions"));
-        snap.forEach(d=>{
-          const data = d.data();
-          if(data.enabled === true) qs.push({ id:d.id, ...data });
-        });
-        qs.sort((a,b)=> (a.createdAt?.seconds||0) - (b.createdAt?.seconds||0));
-      }catch(_){}
+        const snap2 = await getDocs(query(
+          collection(db, "questions"),
+          where("enabled","==", true),
+          limit(500)
+        ));
+        snap2.forEach(d => qs.push({ id: d.id, ...d.data() }));
+  
+        // Client-side sort to keep consistent order
+        qs.sort((a,b) => (a.createdAt?.seconds || 0) - (b.createdAt?.seconds || 0));
+      }catch(e2){
+        console.error("loadQuestions fallback query failed:", e2);
+        toast(`Questions fallback failed: ${e2?.code || e2?.message || e2}`);
+      }
     }
+  
     state.questions = qs;
   }
+
 
   async function checkAdmin(uid){
     if(!uid) return false;
@@ -2540,3 +2554,4 @@
 </script>
 </body>
 </html>
+
