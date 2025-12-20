@@ -1293,7 +1293,7 @@
   const answerOptions = state.settings.answerScale;
   const impOptions = state.settings.importanceScale;
 
-  const clampInt = (n, a, b) => Math.max(a, Math.min(b, n | 0));
+  const clampInt = (n, a, b) => Math.max(a, Math.min(b, (n | 0)));
   let curIdx = clampInt(Number(localStorage.getItem(idxKey) || 0), 0, qs.length - 1);
 
   $app.innerHTML = `
@@ -1391,8 +1391,7 @@
 
     // progress + answered badge
     document.getElementById("qProgress").textContent = `Q${curIdx + 1} / ${qs.length}`;
-    const answered = !!answers[q.id];
-    document.getElementById("qAnsweredBadge").textContent = answered ? "Answered" : "Unanswered";
+    document.getElementById("qAnsweredBadge").textContent = answers[q.id] ? "Answered" : "Unanswered";
 
     // buttons
     const $prev = document.getElementById("btnPrev");
@@ -1403,6 +1402,7 @@
     // direction chips
     const partsRaw = getQuestionDirParts(q, false);
     const partsNorm = getQuestionDirParts(q, true);
+
     const chips = (partsRaw.length ? partsRaw : partsNorm).map(p=>{
       const d = dirDisplay(p.key);
       const col = d.color || "#aaa";
@@ -1462,7 +1462,7 @@
       </div>
     `;
 
-    // wire answer change
+    // answer change
     $qOne.querySelectorAll('.choiceGrid input[type="radio"]').forEach(inp=>{
       inp.addEventListener("change", ()=>{
         const qid = inp.closest(".choiceGrid").getAttribute("data-qid");
@@ -1476,11 +1476,11 @@
 
         localStorage.setItem(key, JSON.stringify(answers));
         updateLive(computeScore(qs, answers));
-        renderCurrentQuestion(); // refresh "Answered" badge
+        renderCurrentQuestion();
       });
     });
 
-    // wire importance change
+    // importance change
     const impSel = document.getElementById("impSel");
     impSel.addEventListener("change", ()=>{
       const qid = impSel.getAttribute("data-qid");
@@ -1489,11 +1489,11 @@
 
       localStorage.setItem(key, JSON.stringify(answers));
       updateLive(computeScore(qs, answers));
-      renderCurrentQuestion(); // refresh "Answered" badge
+      renderCurrentQuestion();
     });
   }
 
-  // nav buttons
+  // nav
   document.getElementById("btnPrev").onclick = ()=>{
     curIdx = clampInt(curIdx - 1, 0, qs.length - 1);
     localStorage.setItem(idxKey, String(curIdx));
@@ -1520,7 +1520,7 @@
     renderCurrentQuestion();
   };
 
-  // submit attempt (same logic you had)
+  // submit attempt (same payload as your original)
   document.getElementById("submitAttempt").onclick = async ()=>{
     if(Object.keys(answers).length === 0){
       toast("Answer at least one question.");
@@ -2307,7 +2307,7 @@
     await loadSuggestions("pending");
   }
 
-  async function renderAdmin(){
+async function renderAdmin(){
   if(!state.user){
     $app.innerHTML = `<div class="card"><h2>Admin</h2><div class="smallnote muted">Connecting…</div></div>`;
     return;
@@ -2410,6 +2410,15 @@ Local communities should govern themselves | Libertarian Left | 0.9 | decentrali
         </div>
 
         <div class="hr"></div>
+
+        <!-- SEARCH UI -->
+        <div class="row">
+          <input id="q_search" placeholder="Search… (text, tag:economy, dir:RIGHT, enabled/disabled, id:abc)" style="flex:1; width:auto" />
+          <button id="q_searchClear" class="btn small" type="button">Clear</button>
+          <span class="badge" id="q_searchMeta">0</span>
+        </div>
+        <div class="spacer"></div>
+
         <div id="q_list" class="list"></div>
       </div>
 
@@ -2506,7 +2515,6 @@ Local communities should govern themselves | Libertarian Left | 0.9 | decentrali
 
       document.getElementById("q_text").value = "";
       document.getElementById("q_tags").value = "";
-      // keep dirs + weight as the admin's preferred defaults
     }
   }
 
@@ -2542,7 +2550,6 @@ Local communities should govern themselves | Libertarian Left | 0.9 | decentrali
     for(let i=0;i<lines.length;i++){
       const line = lines[i];
 
-      // recommended: Text | Directions | Weight | tags
       const parts = line.split("|").map(p=>p.trim());
       const qText = parts[0] || "";
       const dirsSpec = (parts[1] || defaults.dirsSpec || "").trim();
@@ -2576,9 +2583,7 @@ Local communities should govern themselves | Libertarian Left | 0.9 | decentrali
     return { items, errors };
   }
 
-  // A safe “batch” runner:
-  // - Uses writeBatch if available (faster, atomic-ish),
-  // - Otherwise falls back to sequential updates (works even if you didn't import writeBatch).
+  // batch runner (same as yours)
   async function runBatch(ops){
     const hasWriteBatch = (typeof writeBatch === "function");
     if(hasWriteBatch && ops.length <= 450){
@@ -2592,7 +2597,6 @@ Local communities should govern themselves | Libertarian Left | 0.9 | decentrali
       return;
     }
 
-    // fallback: sequential (safe, slower)
     for(const op of ops){
       if(op.type === "set") await setDoc(op.ref, op.data);
       else if(op.type === "update") await updateDoc(op.ref, op.data);
@@ -2600,7 +2604,69 @@ Local communities should govern themselves | Libertarian Left | 0.9 | decentrali
     }
   }
 
-  async function refreshQuestionList(){
+  // ===== Search + list rendering (NEW) =====
+  let allQuestions = [];
+  let searchText = "";
+  let searchTimer = null;
+
+  function tokenizeSearch(s){
+    return String(s || "").trim().toLowerCase().split(/\s+/).filter(Boolean);
+  }
+
+  function matchesTokens(q, tokens){
+    const text = String(q.text || "").toLowerCase();
+    const id = String(q.id || "").toLowerCase();
+    const tags = (Array.isArray(q.tags) ? q.tags : []).map(t => String(t).toLowerCase());
+    const enabled = (q.enabled === true);
+
+    const dirKeys = [];
+    for(const p of (getQuestionDirParts(q, false) || [])){
+      dirKeys.push(normalizeDirKey(p.key));
+    }
+    if(q.direction) dirKeys.push(normalizeDirKey(q.direction));
+
+    for(const tok of tokens){
+      if(tok === "enabled"){
+        if(!enabled) return false;
+        continue;
+      }
+      if(tok === "disabled"){
+        if(enabled) return false;
+        continue;
+      }
+      if(tok.startsWith("id:")){
+        const v = tok.slice(3).trim();
+        if(v && !id.includes(v)) return false;
+        continue;
+      }
+      if(tok.startsWith("tag:")){
+        const v = tok.slice(4).trim();
+        if(v && !tags.some(t => t.includes(v))) return false;
+        continue;
+      }
+      if(tok.startsWith("dir:") || tok.startsWith("direction:")){
+        const v = tok.split(":").slice(1).join(":").trim();
+        if(v){
+          const want = normalizeDirKey(v);
+          if(!dirKeys.some(k => k === want)) return false;
+        }
+        continue;
+      }
+
+      if(!(text.includes(tok) || id.includes(tok) || tags.some(t => t.includes(tok)))){
+        return false;
+      }
+    }
+    return true;
+  }
+
+  function getFilteredQuestions(){
+    const tokens = tokenizeSearch(searchText);
+    if(!tokens.length) return allQuestions;
+    return allQuestions.filter(q => matchesTokens(q, tokens));
+  }
+
+  async function fetchAdminQuestions(){
     const out = [];
     try{
       const snap = await getDocs(query(collection(db,"questions"), orderBy("createdAt","desc"), limit(400)));
@@ -2610,9 +2676,25 @@ Local communities should govern themselves | Libertarian Left | 0.9 | decentrali
       snap.forEach(d=> out.push({ id:d.id, ...d.data() }));
       out.sort((a,b)=> (b.createdAt?.seconds||0)-(a.createdAt?.seconds||0));
     }
+    allQuestions = out;
+  }
 
+  function renderQuestionList(){
     const $list = document.getElementById("q_list");
-    $list.innerHTML = out.map(q=>{
+    const filtered = getFilteredQuestions();
+
+    const $meta = document.getElementById("q_searchMeta");
+    $meta.textContent = searchText.trim()
+      ? `${filtered.length} / ${allQuestions.length}`
+      : `${allQuestions.length}`;
+
+    // avoid batch actions on hidden items
+    if(searchText.trim()){
+      selected.clear();
+      syncSelectionUI();
+    }
+
+    $list.innerHTML = filtered.map(q=>{
       const parts = getQuestionDirParts(q, false);
       const tags = Array.isArray(q.tags) ? q.tags : [];
       const en = q.enabled === true;
@@ -2645,6 +2727,7 @@ Local communities should govern themselves | Libertarian Left | 0.9 | decentrali
                 ${chips || `<span class="badge">${htmlEscape(q.direction || "—")}</span>`}
                 <span class="badge">Weight: <span class="mono">${Number(q.weight ?? 1).toFixed(2)}</span></span>
                 ${tags.length ? `<span class="badge">Tags: ${htmlEscape(tags.join(", "))}</span>` : ``}
+                <span class="badge">ID: <span class="mono">${htmlEscape(q.id)}</span></span>
               </div>
             </div>
 
@@ -2674,7 +2757,7 @@ Local communities should govern themselves | Libertarian Left | 0.9 | decentrali
     $list.querySelectorAll("[data-qedit]").forEach(btn=>{
       btn.onclick = ()=>{
         const id = btn.getAttribute("data-qedit");
-        const q = out.find(x=>x.id===id);
+        const q = allQuestions.find(x=>x.id===id);
         if(q) setEditMode(q);
       };
     });
@@ -2683,13 +2766,14 @@ Local communities should govern themselves | Libertarian Left | 0.9 | decentrali
     $list.querySelectorAll("[data-qtoggle]").forEach(btn=>{
       btn.onclick = async ()=>{
         const id = btn.getAttribute("data-qtoggle");
-        const cur = out.find(x=>x.id===id);
+        const cur = allQuestions.find(x=>x.id===id);
         if(!cur) return;
         try{
           await updateDoc(doc(db,"questions", id), { enabled: !(cur.enabled===true) });
           toast("Updated.");
           await loadQuestions();
-          await refreshQuestionList();
+          await fetchAdminQuestions();
+          renderQuestionList();
         }catch(e){
           toast("Failed: " + (e?.message || e));
         }
@@ -2707,7 +2791,8 @@ Local communities should govern themselves | Libertarian Left | 0.9 | decentrali
           syncSelectionUI();
           toast("Deleted.");
           await loadQuestions();
-          await refreshQuestionList();
+          await fetchAdminQuestions();
+          renderQuestionList();
         }catch(e){
           toast("Delete failed: " + (e?.message || e));
         }
@@ -2717,8 +2802,34 @@ Local communities should govern themselves | Libertarian Left | 0.9 | decentrali
     syncSelectionUI();
   }
 
-  document.getElementById("q_refresh").onclick = refreshQuestionList;
+  // wire search
+  const $qSearch = document.getElementById("q_search");
+  const $qSearchClear = document.getElementById("q_searchClear");
 
+  $qSearch.addEventListener("input", ()=>{
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(()=>{
+      searchText = $qSearch.value;
+      renderQuestionList();
+    }, 120);
+  });
+
+  $qSearchClear.onclick = ()=>{
+    $qSearch.value = "";
+    searchText = "";
+    selected.clear();
+    syncSelectionUI();
+    renderQuestionList();
+  };
+
+  // refresh
+  document.getElementById("q_refresh").onclick = async ()=>{
+    await fetchAdminQuestions();
+    renderQuestionList();
+    toast("List refreshed.");
+  };
+
+  // select all / clear selection
   document.getElementById("q_selectAll").onclick = ()=>{
     document.querySelectorAll("#q_list input[type='checkbox'][data-qsel]").forEach(cb=>{
       cb.checked = true;
@@ -2756,7 +2867,8 @@ Local communities should govern themselves | Libertarian Left | 0.9 | decentrali
 
       setEditMode(null);
       await loadQuestions();
-      await refreshQuestionList();
+      await fetchAdminQuestions();
+      renderQuestionList();
     }catch(e){
       toast("Failed: " + (e?.message || e));
     }
@@ -2786,7 +2898,8 @@ Local communities should govern themselves | Libertarian Left | 0.9 | decentrali
       if(patchOrDelete === "__DELETE__") selected.clear();
       toast("Batch operation done.");
       await loadQuestions();
-      await refreshQuestionList();
+      await fetchAdminQuestions();
+      renderQuestionList();
     }catch(e){
       toast("Batch failed: " + (e?.message || e));
     }
@@ -2837,7 +2950,8 @@ Local communities should govern themselves | Libertarian Left | 0.9 | decentrali
       toast(`Added ${items.length} questions.`);
       document.getElementById("q_bulk").value = "";
       await loadQuestions();
-      await refreshQuestionList();
+      await fetchAdminQuestions();
+      renderQuestionList();
     }catch(e){
       toast("Bulk add failed: " + (e?.message || e));
     }
@@ -2846,10 +2960,9 @@ Local communities should govern themselves | Libertarian Left | 0.9 | decentrali
   // initial load
   setEditMode(null);
   syncSelectionUI();
-  await refreshQuestionList();
+  await fetchAdminQuestions();
+  renderQuestionList();
 }
-
-
   // ---- Router render ----
   async function render(){
     const r = route();
@@ -2918,4 +3031,3 @@ Local communities should govern themselves | Libertarian Left | 0.9 | decentrali
 </script>
 </body>
 </html>
-
