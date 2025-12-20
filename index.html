@@ -2386,7 +2386,12 @@ async function renderAdmin(){
         <div class="row">
           <button id="q_save" class="btn good" type="button">Add question</button>
           <button id="q_cancelEdit" class="btn" type="button" style="display:none;">Cancel edit</button>
+
           <button id="q_refresh" class="btn" type="button">Refresh list</button>
+
+          <!-- NEW: exports -->
+          <button id="q_exportBulk" class="btn small primary" type="button">Export bulk</button>
+          <button id="q_exportJson" class="btn small" type="button">Export JSON</button>
         </div>
 
         <div class="hr"></div>
@@ -2604,7 +2609,7 @@ Local communities should govern themselves | Libertarian Left | 0.9 | decentrali
     }
   }
 
-  // ===== Search + list rendering (NEW) =====
+  // ===== Search + list rendering =====
   let allQuestions = [];
   let searchText = "";
   let searchTimer = null;
@@ -2957,6 +2962,85 @@ Local communities should govern themselves | Libertarian Left | 0.9 | decentrali
     }
   };
 
+  // ===== NEW: Export helpers =====
+  function sanitizeField(s){
+    // Bulk uses "|" delimiter. Keep export import-safe.
+    return String(s ?? "")
+      .replaceAll("\r"," ")
+      .replaceAll("\n"," ")
+      .replaceAll("|","∣")
+      .trim();
+  }
+
+  function directionsToSpec(q){
+    const dirs = (Array.isArray(q.directions) && q.directions.length)
+      ? q.directions
+      : (q.direction ? [{ key: q.direction, w: 1 }] : []);
+
+    // Export in a parseDirectionSpec-friendly canonical form.
+    return (dirs.length ? dirs : [{ key:"RIGHT", w:1 }]).map(d=>{
+      const keyRaw = d?.key ?? d?.sectorKey ?? d?.poleKey ?? d?.dir ?? "";
+      const key = normalizeDirKey(keyRaw);
+      const w = Number(d?.w ?? d?.weight ?? 1);
+      const wNum = Number.isFinite(w) ? w : 1;
+
+      // compact-ish number string
+      const wStr = String(wNum)
+        .replace(/\.0+$/,"")
+        .replace(/(\.\d*?)0+$/,"$1")
+        .replace(/\.$/,"");
+
+      return `${key}:${wStr || "1"}`;
+    }).join(", ");
+  }
+
+  function toBulkLine(q){
+    const text = sanitizeField(q.text || "");
+    const dirs = sanitizeField(directionsToSpec(q) || "RIGHT:1");
+    const w = Number(q.weight ?? 1);
+    const weightStr = Number.isFinite(w) ? w.toFixed(2) : "1.00";
+    const tags = Array.isArray(q.tags) ? q.tags.map(t=>sanitizeField(t)).join(",") : "";
+    const line = `${text} | ${dirs} | ${weightStr} | ${tags}`;
+    // If disabled, keep it in backup but comment it out (parseBulk skips # lines)
+    return (q.enabled === false) ? `# ${line}` : line;
+  }
+
+  function downloadText(filename, text){
+    const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  document.getElementById("q_exportBulk").onclick = async ()=>{
+    await fetchAdminQuestions();
+
+    const sorted = [...allQuestions].sort((a,b)=>(a.createdAt?.seconds||0)-(b.createdAt?.seconds||0));
+    const lines = sorted.map(toBulkLine).join("\n");
+
+    try{ await navigator.clipboard.writeText(lines); }catch(_){}
+    downloadText("questions_bulk_backup.txt", lines);
+    toast("Exported bulk backup (downloaded, and copied if allowed).");
+  };
+
+  document.getElementById("q_exportJson").onclick = async ()=>{
+    await fetchAdminQuestions();
+
+    const payload = {
+      exportedAt: new Date().toISOString(),
+      count: allQuestions.length,
+      questions: allQuestions
+    };
+
+    downloadText("questions_backup.json", JSON.stringify(payload, null, 2));
+    toast("Exported JSON backup.");
+  };
+
   // initial load
   setEditMode(null);
   syncSelectionUI();
@@ -3031,3 +3115,4 @@ Local communities should govern themselves | Libertarian Left | 0.9 | decentrali
 </script>
 </body>
 </html>
+
