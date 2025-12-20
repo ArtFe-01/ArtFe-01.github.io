@@ -405,12 +405,16 @@
   };
 
   const state = {
-    user: null,
-    isAdmin: false,
-    settings: structuredClone(DEFAULT_SETTINGS),
-    questions: [],
-    lastAttempt: null,
-  };
+  user: null,
+  isAdmin: false,
+  settings: structuredClone(DEFAULT_SETTINGS),
+  questions: [],
+  lastAttempt: null,
+
+  // attemptId -> { res, computedDoc, settingsMode, when }
+  recomputeCache: {},
+};
+
 
   // ---- UI helpers ----
   const $app = document.getElementById("app");
@@ -1816,7 +1820,135 @@
     `;
   }
 
-  async function renderAttemptPage(id, isShare=false){
+    // ============================
+  // RECOMPUTE HELPERS
+  // ============================
+
+  function withTempSettings(tempSettings, fn){
+    const prev = state.settings;
+    state.settings = tempSettings;
+    try{ return fn(); }
+    finally{ state.settings = prev; }
+  }
+
+  function computedDocFromRes(res, settingsUsed){
+    const c = res.classification;
+    return {
+      x: res.x, y: res.y, r: res.r,
+
+      kind: c.kind,
+      poleKey: c.poleKey,
+      poleName: c.poleName,
+      poleAngleDistance: c.poleAngleDistance ?? null,
+
+      sectorKey: c.sectorKey,
+      sectorName: c.sectorName,
+      sectorColorName: c.sectorColorName,
+      filterName: c.filterName,
+      sliceName: c.sliceName,
+      leanPoleKey: c.leanPoleKey ?? null,
+      leanPoleName: c.leanPoleName ?? null,
+      betweenPoles: c.betweenPoles,
+
+      label: c.label,
+      radicalism: c.radicalism,
+      angle360: c.angle360,
+
+      maxSum: res.maxSum,
+      synergyNotes: res.synergyNotes,
+      breakdown: res.breakdown,
+
+      // IMPORTANT: store snapshot so this recomputed attempt is explainable later
+      settingsSnapshot: settingsUsed,
+    };
+  }
+
+  function snapshotQuestionFromBreakdownRow(row){
+    // row is one element from attempt.computed.breakdown
+    const id = row.qid || row.id;
+    if(!id) return null;
+
+    // Prefer stored directions array if available
+    let dirs = Array.isArray(row.directions) && row.directions.length ? row.directions : [];
+
+    // Fallback: parse direction string
+    if(!dirs.length && typeof row.direction === "string" && row.direction.trim()){
+      dirs = parseDirectionSpec(row.direction);
+      if(!dirs.length && isValidDirKey(row.direction)){
+        dirs = [{ key: normalizeDirKey(row.direction), w: 1 }];
+      }
+    }
+
+    // Last resort: if nothing, cannot score this question
+    if(!dirs.length) return null;
+
+    return {
+      id,
+      text: row.text || row.question || "",
+      directions: dirs,
+      direction: dirs[0]?.key || normalizeDirKey(row.direction || ""),
+      weight: Number(row.weight ?? 1),
+      tags: Array.isArray(row.tags) ? row.tags : [],
+      enabled: true, // irrelevant for scoring
+    };
+  }
+
+  function buildQuestionSetForAttempt(attempt){
+    // Build a scoring question list only for qids that exist in attempt.answers
+    const ans = attempt?.answers || {};
+    const qids = Object.keys(ans);
+
+    // Map from current loaded (enabled) questions
+    const m = new Map();
+    for(const q of (state.questions || [])){
+      if(q?.id) m.set(q.id, q);
+    }
+
+    // Add snapshots from stored breakdown for missing qids
+    const bd = attempt?.computed?.breakdown;
+    if(Array.isArray(bd)){
+      for(const row of bd){
+        const qid = row.qid || row.id;
+        if(!qid || m.has(qid)) continue;
+        const snap = snapshotQuestionFromBreakdownRow(row);
+        if(snap) m.set(qid, snap);
+      }
+    }
+
+    // Output only answered qids (and only those we can score)
+    const out = [];
+    for(const id of qids){
+      const q = m.get(id);
+      if(!q) continue;
+
+      // Ensure we have at least one direction
+      const parts = getQuestionDirParts(q, true);
+      if(!parts.length) continue;
+
+      out.push(q);
+    }
+    return out;
+  }
+
+  function recomputeAttemptLocal(attempt, settingsMode){
+    // settingsMode: "current" | "snapshot"
+    const settingsUsed =
+      (settingsMode === "snapshot" && attempt?.computed?.settingsSnapshot)
+        ? attempt.computed.settingsSnapshot
+        : state.settings;
+
+    const questionsForThisAttempt = buildQuestionSetForAttempt(attempt);
+
+    const res = withTempSettings(settingsUsed, ()=>{
+      return computeScore(questionsForThisAttempt, attempt.answers || {});
+    });
+
+    const computedDoc = computedDocFromRes(res, settingsUsed);
+    return { res, computedDoc, settingsMode, when: new Date().toISOString() };
+  }
+
+
+    async function renderAttemptPage(id, isShare=false){
     const attempt = await fetchAttemptById(id);
     if(!attempt){
       $app.innerHTML = `<div class="card"><h2>Not found</h2><div class="smallnote muted">No attempt with that ID.</div></div>`;
@@ -1832,12 +1964,81 @@
       return;
     }
 
+    const isMine = state.user && attempt.uid === state.user.uid;
     const c = attempt.computed;
     const canvasId = "c_attempt";
-    const isMine = state.user && attempt.uid === state.user.uid;
+
+    // recompute cache (if any)
+    const rc = state.recomputeCache?.[attempt.id] || null;
+    const rcC = rc?.computedDoc || null;
 
     const sector = SECTORS.find(s=>s.key===c.sectorKey);
     const sectorColor = sector?.color || getCSS("--grey");
+
+    // points to draw
+    const points = [
+      { x: c.x, y: c.y, label: (isShare ? "Shared (stored)" : "Stored"), color:"rgba(124,156,255,.95)" }
+    ];
+    if(rcC){
+      points.push({ x: rcC.x, y: rcC.y, label:"Recomputed", color:"rgba(68,239,154,.95)" });
+    }
+
+    const recomputePanel = (isMine && !isShare) ? `
+      <div class="hr"></div>
+      <div class="item">
+        <div class="top">
+          <div>
+            <div class="title">Recompute</div>
+            <div class="meta">
+              Re-run scoring using <b>current code</b>, using either current settings or the stored settings snapshot.
+              By default it uses your answered question IDs, pulling data from the current question bank when possible and falling back to the stored ledger snapshot.
+            </div>
+          </div>
+        </div>
+
+        <div class="spacer"></div>
+        <div class="row">
+          <button class="btn small good" type="button" data-action="recomputeCurrent">Recompute (current settings)</button>
+          <button class="btn small warn" type="button" data-action="recomputeSnapshot">Recompute (stored settings snapshot)</button>
+          <button class="btn small" type="button" data-action="clearRecompute" ${rcC ? "" : "disabled"}>Clear recompute</button>
+        </div>
+
+        ${rcC ? `
+          <div class="spacer"></div>
+          <div class="kpi">
+            <div class="box">
+              <div class="t">Stored X / Y / R</div>
+              <div class="v mono">${c.x.toFixed(3)} / ${c.y.toFixed(3)} / ${c.r.toFixed(3)}</div>
+            </div>
+            <div class="box">
+              <div class="t">Recomputed X / Y / R</div>
+              <div class="v mono">${rcC.x.toFixed(3)} / ${rcC.y.toFixed(3)} / ${rcC.r.toFixed(3)}</div>
+            </div>
+            <div class="box">
+              <div class="t">Stored label</div>
+              <div class="v">${htmlEscape(c.label || "—")}</div>
+            </div>
+            <div class="box">
+              <div class="t">Recomputed label</div>
+              <div class="v">${htmlEscape(rcC.label || "—")}</div>
+            </div>
+          </div>
+
+          <div class="spacer"></div>
+          <div class="row">
+            <button class="btn small primary" type="button" data-action="saveRecomputedAsNew">Save recomputed as NEW attempt</button>
+            <button class="btn small danger" type="button" data-action="overwriteWithRecomputed">Overwrite this attempt (danger)</button>
+          </div>
+
+          <div class="spacer"></div>
+          <div class="smallnote muted">
+            Recommended: save as new attempt so history stays intact. Overwrite is only here if you explicitly want to replace the stored computed result.
+          </div>
+        ` : ``}
+      </div>
+    ` : (isMine && isShare) ? `
+      <div class="smallnote muted">Recompute controls are hidden in share view. Open this attempt from your private ledger to recompute.</div>
+    ` : ``;
 
     $app.innerHTML = `
       <div class="grid cols2">
@@ -1847,6 +2048,7 @@
             <span class="badge primary">X: <span class="mono">${c.x.toFixed(3)}</span></span>
             <span class="badge primary">Y: <span class="mono">${c.y.toFixed(3)}</span></span>
             <span class="badge warn">Radicalism: <span class="mono">${c.r.toFixed(3)}</span></span>
+            ${rcC ? `<span class="badge good">Recomputed R: <span class="mono">${rcC.r.toFixed(3)}</span></span>` : ``}
           </div>
           <div class="spacer"></div>
 
@@ -1861,6 +2063,19 @@
               ${c.sliceName ? `<span class="badge warn">Slice: ${htmlEscape(c.sliceName)}</span>` : ``}
             </div>
             <div class="meta">Attempt: ${htmlEscape(attempt.id)} · ${htmlEscape(fmtTime(attempt.createdAt))}</div>
+
+            ${rcC ? `
+              <div class="spacer"></div>
+              <div class="title">Recomputed preview</div>
+              <div class="meta">
+                <span class="badge good">Label: ${htmlEscape(rcC.label || "—")}</span>
+                <span class="badge good">Pole: ${htmlEscape(rcC.poleName || "—")}</span>
+                <span class="badge">Between: ${htmlEscape(rcC.betweenPoles || "—")}</span>
+                <span class="badge good">X <span class="mono">${rcC.x.toFixed(3)}</span></span>
+                <span class="badge good">Y <span class="mono">${rcC.y.toFixed(3)}</span></span>
+                <span class="badge good">R <span class="mono">${rcC.r.toFixed(3)}</span></span>
+              </div>
+            ` : ``}
           </div>
 
           <div class="spacer"></div>
@@ -1887,6 +2102,8 @@
             <div class="smallnote muted">Read-only view (sharing controls require ownership).</div>
           `}
 
+          ${recomputePanel}
+
           <div class="hr"></div>
           <div class="row">
             <a class="btn" href="#/ledger">Open ledger</a>
@@ -1897,18 +2114,27 @@
         <div class="card">
           <h2>Transparency Ledger</h2>
           <div class="smallnote muted">
-            Exact computation: per-question weight, importance multiplier, answer value, and final contribution.
+            Stored computation: per-question weight, importance multiplier, answer value, and final contribution.
           </div>
           <div class="hr"></div>
           ${renderLedgerTables(attempt)}
+
+          ${rcC ? `
+            <div class="hr"></div>
+            <h2 style="margin-top:0">Recomputed Ledger (preview)</h2>
+            <div class="smallnote muted">
+              This preview uses the recomputed result currently in memory. Save it as a new attempt if you want a permanent record.
+            </div>
+            <div class="hr"></div>
+            ${renderLedgerTables({ computed: rcC })}
+          ` : ``}
         </div>
       </div>
     `;
 
-    drawCompass(document.getElementById(canvasId), [
-      { x: c.x, y: c.y, label: isShare ? "Shared" : "You", color:"rgba(124,156,255,.95)" }
-    ]);
+    drawCompass(document.getElementById(canvasId), points);
 
+    // ------- existing controls -------
     const btnToggle = $app.querySelector('[data-action="togglePublic"]');
     const btnCopy = $app.querySelector('[data-action="copyLink"]');
 
@@ -1934,6 +2160,101 @@
           toast("Share link copied.");
         }catch{
           toast("Copy failed. Manually copy from address bar.");
+        }
+      };
+    }
+
+    // ------- recompute controls -------
+    const btnReCur = $app.querySelector('[data-action="recomputeCurrent"]');
+    const btnReSnap = $app.querySelector('[data-action="recomputeSnapshot"]');
+    const btnClear = $app.querySelector('[data-action="clearRecompute"]');
+    const btnSaveNew = $app.querySelector('[data-action="saveRecomputedAsNew"]');
+    const btnOverwrite = $app.querySelector('[data-action="overwriteWithRecomputed"]');
+
+    if(btnReCur){
+      btnReCur.onclick = ()=>{
+        try{
+          const out = recomputeAttemptLocal(attempt, "current");
+          state.recomputeCache[attempt.id] = out;
+          toast("Recomputed (current settings).");
+          render();
+        }catch(e){
+          console.error(e);
+          toast("Recompute failed: " + (e?.message || e));
+        }
+      };
+    }
+
+    if(btnReSnap){
+      btnReSnap.onclick = ()=>{
+        try{
+          if(!attempt?.computed?.settingsSnapshot){
+            toast("No settings snapshot stored for this attempt.");
+            return;
+          }
+          const out = recomputeAttemptLocal(attempt, "snapshot");
+          state.recomputeCache[attempt.id] = out;
+          toast("Recomputed (stored settings snapshot).");
+          render();
+        }catch(e){
+          console.error(e);
+          toast("Recompute failed: " + (e?.message || e));
+        }
+      };
+    }
+
+    if(btnClear){
+      btnClear.onclick = ()=>{
+        delete state.recomputeCache[attempt.id];
+        toast("Cleared recompute.");
+        render();
+      };
+    }
+
+    if(btnSaveNew){
+      btnSaveNew.onclick = async ()=>{
+        try{
+          const cached = state.recomputeCache?.[attempt.id];
+          if(!cached?.computedDoc) return toast("Nothing recomputed yet.");
+          if(!state.user) return toast("Not signed in.");
+
+          const attemptDoc = {
+            uid: state.user.uid,
+            createdAt: serverTimestamp(),
+            public: false,
+            answers: attempt.answers || {},
+            recomputedFrom: attempt.id,
+            computed: cached.computedDoc,
+          };
+
+          const ref = await addDoc(collection(db, "attempts"), attemptDoc);
+          toast("Saved as new attempt.");
+          navTo(`#/attempt/${ref.id}`);
+        }catch(e){
+          toast("Save failed: " + (e?.message || e));
+        }
+      };
+    }
+
+    if(btnOverwrite){
+      btnOverwrite.onclick = async ()=>{
+        try{
+          const cached = state.recomputeCache?.[attempt.id];
+          if(!cached?.computedDoc) return toast("Nothing recomputed yet.");
+          if(!isMine) return toast("Only the owner can overwrite an attempt.");
+          if(!confirm("Overwrite this attempt's stored computed result? This changes history.")) return;
+
+          await updateDoc(doc(db, "attempts", attempt.id), {
+            computed: cached.computedDoc,
+            recomputedAt: serverTimestamp(),
+            recomputedMode: cached.settingsMode || "current",
+          });
+
+          toast("Attempt overwritten.");
+          delete state.recomputeCache[attempt.id];
+          render();
+        }catch(e){
+          toast("Overwrite failed: " + (e?.message || e));
         }
       };
     }
@@ -3232,5 +3553,6 @@ Local communities should govern themselves | Libertarian Left | 0.9 | decentrali
 </script>
 </body>
 </html>
+
 
 
