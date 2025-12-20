@@ -610,203 +610,188 @@
     return state.settings.importanceScale.find(i=>Number(i.key)===Number(n)) || state.settings.importanceScale[2];
   }
 
-  // ===== NEW: Pluri-direction support (hierarchical, + pole-name keys) =====
+  // ===== Pluri-direction support (hierarchical) + pole-name keys =====
 
-// Accept BOTH:
-// - old sector keys: BLUE, PURPLE, GREEN, RED, REDBROWN, BROWN
-// - new pole-name keys (recommended for UI): Right-wing, Centrist, Left-wing, Syncretic, Reactionary, Third-Position
-//
-// Hierarchy rule (when no explicit weights are provided):
-//   first = 1, second = 0.5, third = 0.25, ...
-// You can override by writing explicit weights: "Right-wing:0.6, Centrist:0.4"
-
-// Optional: give poles a consistent color (used in badges/chips)
-const POLE_COLORS = {
-  THIRD:       getCSS("--redbrown"),
-  REACTIONARY: getCSS("--brown"),
-  RIGHT:       getCSS("--blue"),
-  CENTRIST:    getCSS("--grey"),
-  LEFT:        getCSS("--green"),
-  SYNCRETIC:   getCSS("--red"),
-};
-
-// Normalize user input tokens into internal keys
-function normalizeDirKey(rawKey){
-  const k = String(rawKey || "").trim();
-  if(!k) return "";
-
-  const up = k.toUpperCase().replaceAll(" ", "").replaceAll("_","").replaceAll("-","");
-
-  // Allow friendly names:
-  // "Right-wing" -> RIGHT, "Third-Position" -> THIRD, etc.
-  const alias = {
-    RIGHTWING: "RIGHT",
-    RIGHT: "RIGHT",
-    CENTRIST: "CENTRIST",
-    LEFTWING: "LEFT",
-    LEFT: "LEFT",
-    SYNCRETIC: "SYNCRETIC",
-    REACTIONARY: "REACTIONARY",
-    THIRDPOSITION: "THIRD",
-    THIRD: "THIRD",
-
-    // keep legacy sector keys too:
-    BLUE: "BLUE",
-    PURPLE: "PURPLE",
-    GREEN: "GREEN",
-    RED: "RED",
-    REDBROWN: "REDBROWN",
-    BROWN: "BROWN",
+  const POLE_COLORS = {
+    THIRD:       getCSS("--redbrown"),
+    REACTIONARY: getCSS("--brown"),
+    RIGHT:       getCSS("--blue"),
+    CENTRIST:    getCSS("--grey"),
+    LEFT:        getCSS("--green"),
+    SYNCRETIC:   getCSS("--red"),
   };
 
-  return alias[up] || up;
-}
+  function normalizeDirKey(rawKey){
+    const k = String(rawKey || "").trim();
+    if(!k) return "";
+    const up = k.toUpperCase().replaceAll(" ", "").replaceAll("_","").replaceAll("-","");
 
-function isValidDirKey(k){
-  const kk = normalizeDirKey(k);
-  if(!kk) return false;
-  return POLES.some(p => p.key === kk) || SECTORS.some(s => s.key === kk) || kk === "GREY";
-}
+    const alias = {
+      RIGHTWING: "RIGHT",
+      RIGHT: "RIGHT",
+      CENTRIST: "CENTRIST",
+      LEFTWING: "LEFT",
+      LEFT: "LEFT",
+      SYNCRETIC: "SYNCRETIC",
+      REACTIONARY: "REACTIONARY",
+      THIRDPOSITION: "THIRD",
+      THIRD: "THIRD",
 
-// Vector for either a POLE key or a SECTOR key
-function dirVec(key){
-  const kk = normalizeDirKey(key);
+      BLUE: "BLUE",
+      PURPLE: "PURPLE",
+      GREEN: "GREEN",
+      RED: "RED",
+      REDBROWN: "REDBROWN",
+      BROWN: "BROWN",
 
-  const pole = POLES.find(p => p.key === kk);
-  if(pole){
-    const a = rad(pole.angle360);
-    return { x: Math.cos(a), y: Math.sin(a) };
-  }
-
-  const sector = SECTORS.find(s => s.key === kk);
-  if(sector){
-    const a = rad(sector.angleDeg);
-    return { x: Math.cos(a), y: Math.sin(a) };
-  }
-
-  return { x: 0, y: 0 };
-}
-
-function dirDisplay(key){
-  const kk = normalizeDirKey(key);
-
-  const pole = POLES.find(p => p.key === kk);
-  if(pole){
-    return {
-      label: pole.name.replace(" Politics", ""),
-      color: POLE_COLORS[kk] || getCSS("--accent"),
-      kind: "POLE",
-      key: kk
+      GREY: "GREY",
+      GRAY: "GREY",
     };
+
+    return alias[up] || up;
   }
 
-  const sector = SECTORS.find(s => s.key === kk);
-  if(sector){
-    return {
-      label: `${sector.name} (${sector.colorName})`,
-      color: sector.color,
-      kind: "SECTOR",
-      key: kk
-    };
+  function isValidDirKey(k){
+    const kk = normalizeDirKey(k);
+    if(!kk) return false;
+    if(kk === "GREY") return true;
+    return POLES.some(p => p.key === kk) || SECTORS.some(s => s.key === kk);
   }
 
-  return { label: kk || "—", color: "#aaa", kind: "UNKNOWN", key: kk };
-}
+  function dirVec(key){
+    const kk = normalizeDirKey(key);
 
-// Accepts direction spec strings like:
-// "Right-wing"
-// "Right-wing, Centrist, Left-wing"
-// "Right-wing:0.6, Centrist:0.4"
-// "Right-wing > Centrist > Left-wing"  (hierarchy separator)
-function parseDirectionSpec(spec){
-  let s = String(spec || "").trim();
-  if(!s) return [];
-
-  // allow ">" as a hierarchy separator
-  s = s.replaceAll(">", ",");
-
-  const tokens = s
-    .split(",")
-    .map(x => x.trim())
-    .filter(Boolean);
-
-  const parts = [];
-  for(let i=0; i<tokens.length; i++){
-    const tok = tokens[i];
-    const [rawKey, rawW] = tok.split(":").map(z => z.trim());
-    const key = normalizeDirKey(rawKey);
-
-    if(!isValidDirKey(key)) continue;
-
-    let w;
-    if(rawW == null || rawW === ""){
-      // hierarchical default weight: 1, 0.5, 0.25, ...
-      w = Math.pow(0.5, i);
-    } else {
-      const num = Number(rawW);
-      w = Number.isFinite(num) ? num : Math.pow(0.5, i);
+    const pole = POLES.find(p => p.key === kk);
+    if(pole){
+      const a = rad(pole.angle360);
+      return { x: Math.cos(a), y: Math.sin(a) };
     }
 
-    if(Math.abs(w) <= 1e-9) continue;
-    parts.push({ key, w });
-  }
-
-  return parts;
-}
-
-// Returns [{key,w}] from either:
-// - q.directions = [{key:"RIGHT", w:0.6}, ...]
-// - q.direction = "Right-wing" or "RIGHT:0.6, CENTRIST:0.4"
-// normalize=true => divide by sum(abs(w))
-function getQuestionDirParts(q, normalize=true){
-  let parts = [];
-
-  if(Array.isArray(q?.directions) && q.directions.length){
-    parts = q.directions
-      .map((d, idx)=>{
-        const key = normalizeDirKey(d.key ?? d.sectorKey ?? d.poleKey ?? d.dir ?? "");
-        let w = Number(d.w ?? d.weight ?? "");
-        if(!Number.isFinite(w)){
-          // keep hierarchy if stored without weight
-          w = Math.pow(0.5, idx);
-        }
-        return { key, w };
-      })
-      .filter(p => isValidDirKey(p.key) && Math.abs(p.w) > 1e-9);
-  }
-
-  if(!parts.length && typeof q?.direction === "string" && q.direction.trim()){
-    parts = parseDirectionSpec(q.direction);
-    if(!parts.length && isValidDirKey(q.direction)){
-      parts = [{ key: normalizeDirKey(q.direction), w: 1 }];
+    const sector = SECTORS.find(s => s.key === kk);
+    if(sector){
+      const a = rad(sector.angleDeg);
+      return { x: Math.cos(a), y: Math.sin(a) };
     }
+
+    return { x: 0, y: 0 };
   }
 
-  if(!parts.length) return [];
-  if(!normalize) return parts;
+  function dirDisplay(key){
+    const kk = normalizeDirKey(key);
 
-  const sumAbs = parts.reduce((acc,p)=>acc + Math.abs(p.w), 0);
-  if(sumAbs <= 1e-9) return [];
-  return parts.map(p=>({ ...p, w: p.w / sumAbs }));
-}
+    if(kk === "GREY"){
+      return { label:"Grey (Center)", color:getCSS("--grey"), kind:"GREY", key:"GREY" };
+    }
 
-function combinedVecFromParts(parts){
-  let x = 0, y = 0;
-  for(const p of parts){
-    const v = dirVec(p.key);
-    x += v.x * p.w;
-    y += v.y * p.w;
+    const pole = POLES.find(p => p.key === kk);
+    if(pole){
+      return {
+        label: pole.name.replace(" Politics",""),
+        color: POLE_COLORS[kk] || getCSS("--accent"),
+        kind: "POLE",
+        key: kk
+      };
+    }
+
+    const sector = SECTORS.find(s => s.key === kk);
+    if(sector){
+      return {
+        label: `${sector.name} (${sector.colorName})`,
+        color: sector.color,
+        kind: "SECTOR",
+        key: kk
+      };
+    }
+
+    return { label: kk || "—", color:"#aaa", kind:"UNKNOWN", key: kk };
   }
-  return { x, y };
-}
 
-function formatDirPartsForUI(parts){
-  return (parts || []).map(p=>{
-    const d = dirDisplay(p.key);
-    return `${d.label}×${Number(p.w).toFixed(2)}`;
-  }).join(" + ");
-}
-// ===== END hierarchical pluri-direction support =====
+  // Spec examples:
+  // "Right-wing"
+  // "Right-wing, Centrist, Left-wing"
+  // "Right-wing:0.6, Centrist:0.4"
+  // "Right-wing > Centrist > Left-wing"
+  // Hierarchy rule if no explicit weight: 1, 0.5, 0.25, ...
+  function parseDirectionSpec(spec){
+    let s = String(spec || "").trim();
+    if(!s) return [];
+    s = s.replaceAll(">", ",");
+
+    const tokens = s.split(",").map(x=>x.trim()).filter(Boolean);
+    const parts = [];
+
+    for(let i=0;i<tokens.length;i++){
+      const tok = tokens[i];
+      const [rawKey, rawW] = tok.split(":").map(z=>z.trim());
+      const key = normalizeDirKey(rawKey);
+
+      if(!isValidDirKey(key)) continue;
+
+      let w;
+      if(rawW == null || rawW === ""){
+        w = Math.pow(0.5, i);
+      }else{
+        const num = Number(rawW);
+        w = Number.isFinite(num) ? num : Math.pow(0.5, i);
+      }
+      if(Math.abs(w) <= 1e-9) continue;
+
+      parts.push({ key, w });
+    }
+    return parts;
+  }
+
+  // Returns [{key,w}] from either:
+  // - q.directions = [{key:"RIGHT", w:0.6}, ...]
+  // - q.direction = "Right-wing:0.6, Centrist:0.4"
+  // normalize=true => divide by sum(abs(w))
+  function getQuestionDirParts(q, normalize=true){
+    let parts = [];
+
+    if(Array.isArray(q?.directions) && q.directions.length){
+      parts = q.directions
+        .map((d, idx)=>{
+          const key = normalizeDirKey(d.key ?? d.sectorKey ?? d.poleKey ?? d.dir ?? "");
+          let w = Number(d.w ?? d.weight ?? "");
+          if(!Number.isFinite(w)) w = Math.pow(0.5, idx);
+          return { key, w };
+        })
+        .filter(p=>isValidDirKey(p.key) && Math.abs(p.w) > 1e-9);
+    }
+
+    if(!parts.length && typeof q?.direction === "string" && q.direction.trim()){
+      parts = parseDirectionSpec(q.direction);
+      if(!parts.length && isValidDirKey(q.direction)){
+        parts = [{ key: normalizeDirKey(q.direction), w: 1 }];
+      }
+    }
+
+    if(!parts.length) return [];
+    if(!normalize) return parts;
+
+    const sumAbs = parts.reduce((acc,p)=>acc + Math.abs(p.w), 0);
+    if(sumAbs <= 1e-9) return [];
+    return parts.map(p=>({ ...p, w: p.w / sumAbs }));
+  }
+
+  function combinedVecFromParts(parts){
+    let x = 0, y = 0;
+    for(const p of parts){
+      const v = dirVec(p.key);
+      x += v.x * p.w;
+      y += v.y * p.w;
+    }
+    return { x, y };
+  }
+
+  function formatDirPartsForUI(parts){
+    return (parts || []).map(p=>{
+      const d = dirDisplay(p.key);
+      return `${d.label}×${Number(p.w).toFixed(2)}`;
+    }).join(" + ");
+  }
+
+  // ===== END hierarchical pluri-direction support =====
 
   function angleDist(a,b){
     let d = Math.abs(a-b);
@@ -909,7 +894,7 @@ function formatDirPartsForUI(parts){
     };
   }
 
-  // ===== computeScore: supports pluri-direction questions (now pole-first keys) =====
+  // ===== computeScore: supports hierarchical pluri-direction questions =====
   function computeScore(questions, answers){
     const breakdown = [];
     const synergyNotes = [];
@@ -932,14 +917,14 @@ function formatDirPartsForUI(parts){
       const dirParts = getQuestionDirParts(q, true);
       if(!dirParts.length) continue;
 
-      const dirVec = combinedVecFromParts(dirParts);
+      const dirVec2 = combinedVecFromParts(dirParts);
 
       maxSum += Math.abs(w) * 1;
 
       const baseValue = Number(ansDef.value ?? 0);
 
-      const cx = dirVec.x * baseValue * w;
-      const cy = dirVec.y * baseValue * w;
+      const cx = dirVec2.x * baseValue * w;
+      const cy = dirVec2.y * baseValue * w;
       rawX += cx;
       rawY += cy;
 
@@ -959,12 +944,12 @@ function formatDirPartsForUI(parts){
         qid: q.id,
         text: q.text,
 
-        // compatibility field:
+        // compatibility fields:
         direction: dirParts[0]?.key || (q.direction || ""),
 
         // new:
         directions: dirParts,
-        dirText: formatDirPartsForUI(dirParts, true),
+        dirText: formatDirPartsForUI(dirParts),
 
         tags: Array.isArray(q.tags) ? q.tags : [],
         weight,
@@ -1008,9 +993,9 @@ function formatDirPartsForUI(parts){
 
         const inferred = tagStance * strength;
 
-        const dirVec = combinedVecFromParts(row.directions || getQuestionDirParts(q, true));
-        const dx = dirVec.x * inferred * row.w;
-        const dy = dirVec.y * inferred * row.w;
+        const dirVec3 = combinedVecFromParts(row.directions || getQuestionDirParts(q, true));
+        const dx = dirVec3.x * inferred * row.w;
+        const dy = dirVec3.y * inferred * row.w;
 
         rawX += dx;
         rawY += dy;
@@ -1292,7 +1277,7 @@ function formatDirPartsForUI(parts){
         <div class="card">
           <h2>Test</h2>
           <div class="smallnote muted">
-            Questions push you toward a <b>pole direction</b> — or a weighted mix of poles. Your final point is then classified by pole/sector/slice.
+            Questions push you toward a <b>direction mix</b> — default hierarchy (primary→secondary→…) unless you assign weights. Your final point is then classified by pole/sector/slice.
           </div>
           <div class="hr"></div>
 
@@ -1359,16 +1344,16 @@ function formatDirPartsForUI(parts){
         const partsNorm = getQuestionDirParts(q, true);
 
         const chips = (partsRaw.length ? partsRaw : partsNorm).map(p=>{
-          const m = dirMeta(p.key);
-          const col = m.color || "#aaa";
-          const label = m.label;
+          const d = dirDisplay(p.key);
+          const col = d.color || "#aaa";
+          const label = d.label || p.key;
           return `<span class="badge" style="border-color:${hexToRgba(col,.4)}; background:${hexToRgba(col,.12)}; color:#e9eefc">
             <b style="color:${col}">${htmlEscape(label)}</b>
             × <span class="mono">${Number(p.w).toFixed(2)}</span>
           </span>`;
         }).join(" ");
 
-        const fallback = `<span class="badge">Direction: <b>${htmlEscape(dirMeta(q.direction || "—").label)}</b></span>`;
+        const fallback = `<span class="badge">Direction: <b>${htmlEscape(q.direction || "—")}</b></span>`;
 
         return `
           <div class="item">
@@ -1554,13 +1539,12 @@ function formatDirPartsForUI(parts){
     const rows = breakdown.map((r, i)=>{
       const parts = Array.isArray(r.directions) ? r.directions : [];
       const firstKey = parts[0]?.key || r.direction;
-
-      const m0 = dirMeta(firstKey);
-      const color = m0.color || "#bbb";
+      const d0 = dirDisplay(firstKey);
+      const color = d0?.color || "#bbb";
 
       const dirLabel = parts.length
-        ? formatDirPartsForUI(parts, true)
-        : (r.dirText || m0.label || (r.direction || "—"));
+        ? formatDirPartsForUI(parts)
+        : (r.dirText || d0?.label || (r.direction || "—"));
 
       const note = (r.notes && r.notes.length)
         ? `<div class="smallnote warnText" style="margin-top:6px">${htmlEscape(r.notes.join(" "))}</div>`
@@ -1993,10 +1977,11 @@ function formatDirPartsForUI(parts){
           <textarea id="s_text" placeholder="Write a statement/question..."></textarea>
           <div class="spacer"></div>
 
-          <label>Direction mix (comma-separated)</label>
-          <input id="s_dirs" placeholder="e.g. Right-wing:0.6, Centrist:0.4" value="Right-wing" />
+          <label>Directions (comma-separated, hierarchical)</label>
+          <input id="s_dirs" placeholder="e.g. Right-wing, Centrist, Left-wing" value="Right-wing" />
           <div class="smallnote muted" style="margin-top:6px">
-            Keys: <span class="mono">Right-wing, Centrist, Left-wing, Syncretic, Reactionary, Third-Position</span>. Weights are relative; score uses normalized weights.
+            Keys: <span class="mono">Right-wing, Centrist, Left-wing, Syncretic, Reactionary, Third-Position</span>.
+            Use <span class="mono">></span> for hierarchy, or add explicit weights like <span class="mono">Right-wing:0.6, Centrist:0.4</span>.
           </div>
 
           <div class="spacer"></div>
@@ -2041,8 +2026,8 @@ function formatDirPartsForUI(parts){
       try{
         await addDoc(collection(db,"suggestions"), {
           text,
-          directions,                   // NEW (normalized keys)
-          direction: directions[0].key, // compatibility
+          directions,                    // NEW
+          direction: directions[0].key,  // compatibility
           weight: clamp(weight, 0.05, 5),
           tags,
           status: "pending",
@@ -2103,9 +2088,8 @@ function formatDirPartsForUI(parts){
           ? sug.directions
           : (typeof sug.direction === "string" ? parseDirectionSpec(sug.direction) : []);
 
-        if(!dirs.length){
-          const k = normalizeDirKey(sug.direction);
-          if(k) dirs.push({ key: k, w: 1 });
+        if(!dirs.length && typeof sug.direction === "string" && isValidDirKey(sug.direction)){
+          dirs.push({ key: normalizeDirKey(sug.direction), w: 1 });
         }
         if(!dirs.length) return toast("Cannot promote: suggestion has no valid directions.");
 
@@ -2183,9 +2167,9 @@ function formatDirPartsForUI(parts){
           `<span class="badge warn">Pending</span>`;
 
         const chips = parts.map(p=>{
-          const m = dirMeta(p.key);
-          const col = m.color || "#aaa";
-          const label = m.label;
+          const d = dirDisplay(p.key);
+          const col = d.color || "#aaa";
+          const label = d.label || p.key;
           return `<span class="badge" style="border-color:${hexToRgba(col,.4)}; background:${hexToRgba(col,.12)}; color:#e9eefc">
             <b style="color:${col}">${htmlEscape(label)}</b> × <span class="mono">${Number(p.w).toFixed(2)}</span>
           </span>`;
@@ -2199,7 +2183,7 @@ function formatDirPartsForUI(parts){
                 <div class="meta">
                   ${statusBadge}
                   <span class="badge">Direction mix:</span>
-                  ${chips || `<span class="badge">${htmlEscape(dirMeta(s.direction || "—").label)}</span>`}
+                  ${chips || `<span class="badge">${htmlEscape(s.direction || "—")}</span>`}
                   <span class="badge">Weight: <span class="mono">${Number(s.weight ?? 1).toFixed(2)}</span></span>
                   <span class="badge primary">Score: <span class="mono">${Number(s.score ?? 0)}</span></span>
                   <span class="badge">Time: ${htmlEscape(fmtTime(s.createdAt))}</span>
@@ -2288,17 +2272,18 @@ function formatDirPartsForUI(parts){
       <div class="grid cols2">
         <div class="card">
           <h2>Questions</h2>
-          <div class="smallnote muted">Add/disable/delete questions. Each question pushes toward a <b>direction mix</b> (one or more poles; legacy sector keys also work).</div>
+          <div class="smallnote muted">Add/disable/delete questions. Each question pushes toward a <b>direction mix</b> (one or more poles, hierarchical by default).</div>
           <div class="hr"></div>
 
           <label>Question text</label>
           <textarea id="q_text" placeholder="Statement / question..."></textarea>
           <div class="spacer"></div>
 
-          <label>Direction mix (comma-separated)</label>
-          <input id="q_dirs" placeholder="e.g. Right-wing:0.6, Centrist:0.4" value="Right-wing" />
+          <label>Directions (comma-separated, hierarchical)</label>
+          <input id="q_dirs" placeholder="e.g. Right-wing, Centrist, Left-wing" value="Right-wing" />
           <div class="smallnote muted" style="margin-top:6px">
-            Keys: <span class="mono">Right-wing, Centrist, Left-wing, Syncretic, Reactionary, Third-Position</span>. Weights are relative; score uses normalized weights.
+            Keys: <span class="mono">Right-wing, Centrist, Left-wing, Syncretic, Reactionary, Third-Position</span>.
+            Use <span class="mono">></span> for hierarchy, or add explicit weights like <span class="mono">Right-wing:0.6, Centrist:0.4</span>.
           </div>
 
           <div class="spacer"></div>
@@ -2380,9 +2365,9 @@ function formatDirPartsForUI(parts){
         const en = q.enabled === true;
 
         const chips = parts.map(p=>{
-          const m = dirMeta(p.key);
-          const col = m.color || "#aaa";
-          const label = m.label;
+          const d = dirDisplay(p.key);
+          const col = d.color || "#aaa";
+          const label = d.label || p.key;
           return `<span class="badge" style="border-color:${hexToRgba(col,.4)}; background:${hexToRgba(col,.12)}; color:#e9eefc">
             <b style="color:${col}">${htmlEscape(label)}</b> × <span class="mono">${Number(p.w).toFixed(2)}</span>
           </span>`;
@@ -2396,7 +2381,7 @@ function formatDirPartsForUI(parts){
                 <div class="meta">
                   ${en ? `<span class="badge good">Enabled</span>` : `<span class="badge bad">Disabled</span>`}
                   <span class="badge">Direction mix:</span>
-                  ${chips || `<span class="badge">${htmlEscape(dirMeta(q.direction || "—").label)}</span>`}
+                  ${chips || `<span class="badge">${htmlEscape(q.direction || "—")}</span>`}
                   <span class="badge">Weight: <span class="mono">${Number(q.weight ?? 1).toFixed(2)}</span></span>
                   <span class="badge">By: <span class="mono">${htmlEscape(q.createdBy || "—")}</span></span>
                 </div>
@@ -2466,7 +2451,7 @@ function formatDirPartsForUI(parts){
       try{
         await addDoc(collection(db,"questions"), {
           text,
-          directions,                    // NEW (normalized keys)
+          directions,                    // NEW
           direction: directions[0].key,  // compatibility
           weight: clamp(weight, 0.05, 5),
           tags,
@@ -2488,38 +2473,30 @@ function formatDirPartsForUI(parts){
   }
 
   // ---- Router render ----
-  // ---- Router render ----
   async function render(){
     const r = route();
     const [p0, p1] = r.parts;
-  
+
     if (state.user) {
       if (state.user.isAnonymous) {
-        // Guest (NOT "logged" in your sense)
+        // Guest (not "logged in" for UI purposes)
         $userTag.textContent = `Guest · ${state.user.uid.slice(0,8)}…`;
-  
-        // Show Sign in / Sign up button, hide Sign out
         $authBtn.style.display = "inline-flex";
         $signOutBtn.style.display = "none";
       } else {
         // Logged-in (email/password)
         $userTag.textContent = `${state.user.displayName || "User"} · ${state.user.email || ""}`.trim();
-  
-        // Hide Sign up button, show Sign out
         $authBtn.style.display = "none";
         $signOutBtn.style.display = "inline-flex";
       }
     } else {
-      // Not connected yet
       $userTag.textContent = "Connecting…";
-  
-      // Show Sign up button, hide Sign out
       $authBtn.style.display = "inline-flex";
       $signOutBtn.style.display = "none";
     }
-  
+
     $adminLink.style.display = state.isAdmin ? "inline-flex" : "none";
-  
+
     if(p0 === "login") return showAuthModal();
     if(p0 === "quiz") return renderQuiz();
     if(p0 === "ledger") return renderLedger();
@@ -2530,6 +2507,7 @@ function formatDirPartsForUI(parts){
     if(p0 === "compare") return renderCompare();
     return renderHome();
   }
+
   // ---- Boot & Guest auto-signin ----
   async function bootForUser(user){
     state.user = user;
@@ -2562,6 +2540,3 @@ function formatDirPartsForUI(parts){
 </script>
 </body>
 </html>
-
-
-
