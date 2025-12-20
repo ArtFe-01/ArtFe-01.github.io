@@ -553,6 +553,8 @@
 
     async function loadQuestions(){
   const qs = [];
+
+  // Primary query (ordered). May require a composite index.
   try{
     const qref = query(
       collection(db, "questions"),
@@ -563,20 +565,29 @@
     const snap = await getDocs(qref);
     snap.forEach(d => qs.push({ id: d.id, ...d.data() }));
   }catch(e){
-    console.error("loadQuestions failed:", e);
+    console.error("loadQuestions primary query failed:", e);
+    toast(`Questions query failed: ${e?.code || e?.message || e}`);
 
-    // If you *still* see failed-precondition here, the index isn't built/enabled yet.
-    const code = e?.code || "";
-    if(code !== "failed-precondition"){
-      toast(`Failed to load questions: ${code || e?.message || e}`);
+    // Fallback query: still filtered for guests, no orderBy (avoids composite index)
+    try{
+      const snap2 = await getDocs(query(
+        collection(db, "questions"),
+        where("enabled","==", true),
+        limit(500)
+      ));
+      snap2.forEach(d => qs.push({ id: d.id, ...d.data() }));
+
+      // Keep ordering stable
+      qs.sort((a,b) => (a.createdAt?.seconds || 0) - (b.createdAt?.seconds || 0));
+    }catch(e2){
+      console.error("loadQuestions fallback query failed:", e2);
+      toast(`Questions fallback failed: ${e2?.code || e2?.message || e2}`);
     }
   }
 
   state.questions = qs;
 }
-
-
-
+  
   async function checkAdmin(uid){
     if(!uid) return false;
     try{
@@ -2542,5 +2553,6 @@
 </script>
 </body>
 </html>
+
 
 
