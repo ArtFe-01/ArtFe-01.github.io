@@ -1274,260 +1274,312 @@
 
   function safeJsonParse(s){ try{ return JSON.parse(s); }catch{ return null; } }
 
-  function renderQuiz(){
-    const qs = state.questions;
-    if(!qs.length){
-      $app.innerHTML = `
-        <div class="card">
-          <h2>No questions yet</h2>
-          <div class="smallnote muted">An admin must add questions first (Admin → Questions). Or suggest questions in “Suggest Questions”.</div>
-        </div>
-      `;
-      return;
-    }
-
-    const key = "hpc_draft_answers_v2";
-    const answers = safeJsonParse(localStorage.getItem(key)) || {};
-    const answerOptions = state.settings.answerScale;
-    const impOptions = state.settings.importanceScale;
-
+ function renderQuiz(){
+  const qs = state.questions;
+  if(!qs.length){
     $app.innerHTML = `
-      <div class="grid cols2">
-        <div class="card">
-          <h2>Test</h2>
-          <div class="smallnote muted">
-            Questions push you toward a <b>direction mix</b> — default hierarchy (primary→secondary→…) unless you assign weights. Your final point is then classified by pole/sector/slice.
-          </div>
-          <div class="hr"></div>
+      <div class="card">
+        <h2>No questions yet</h2>
+        <div class="smallnote muted">An admin must add questions first (Admin → Questions). Or suggest questions in “Suggest Questions”.</div>
+      </div>
+    `;
+    return;
+  }
 
-          <div class="row">
-            <button id="saveDraft" class="btn small" type="button">Save draft</button>
-            <button id="clearDraft" class="btn small danger" type="button">Clear draft</button>
-          </div>
+  const key = "hpc_draft_answers_v2";
+  const idxKey = "hpc_quiz_index_v1";
 
-          <div class="spacer"></div>
-          <div id="qList" class="list"></div>
+  const answers = safeJsonParse(localStorage.getItem(key)) || {};
+  const answerOptions = state.settings.answerScale;
+  const impOptions = state.settings.importanceScale;
 
-          <div class="hr"></div>
-          <div class="row">
-            <button id="submitAttempt" class="btn good" type="button">Submit attempt</button>
+  const clampInt = (n, a, b) => Math.max(a, Math.min(b, n | 0));
+  let curIdx = clampInt(Number(localStorage.getItem(idxKey) || 0), 0, qs.length - 1);
+
+  $app.innerHTML = `
+    <div class="grid cols2">
+      <div class="card">
+        <h2>Test</h2>
+        <div class="smallnote muted">
+          Answer one question at a time. Use <b>Previous</b>/<b>Next</b> to navigate. Live preview updates from all answers you’ve given so far.
+        </div>
+
+        <div class="hr"></div>
+
+        <div class="row">
+          <button id="saveDraft" class="btn small" type="button">Save draft</button>
+          <button id="clearDraft" class="btn small danger" type="button">Clear draft</button>
+        </div>
+
+        <div class="spacer"></div>
+
+        <div class="row" style="justify-content:space-between;">
+          <span class="badge primary" id="qProgress">Q1 / ${qs.length}</span>
+          <span class="badge" id="qAnsweredBadge"></span>
+        </div>
+
+        <div class="spacer"></div>
+        <div id="qOne"></div>
+
+        <div class="hr"></div>
+
+        <div class="row" style="justify-content:space-between;">
+          <button id="btnPrev" class="btn" type="button">← Previous</button>
+          <button id="btnNext" class="btn primary" type="button">Next →</button>
+        </div>
+
+        <div class="hr"></div>
+
+        <div class="row">
+          <button id="submitAttempt" class="btn good" type="button">Submit attempt</button>
+        </div>
+
+        <div class="spacer"></div>
+        <div class="smallnote muted">
+          Transparency: the ledger stores every question, your answer, importance weight, and each coordinate contribution.
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Live preview</h2>
+        <div class="canvasWrap">
+          <canvas id="c_live" width="520" height="520"></canvas>
+        </div>
+        <div class="spacer"></div>
+        <div class="kpi">
+          <div class="box">
+            <div class="t">Current X</div>
+            <div class="v mono" id="kpi_x">0.00</div>
           </div>
-          <div class="spacer"></div>
-          <div class="smallnote muted">
-            Transparency: the ledger stores every question, your answer, importance weight, and each coordinate contribution.
+          <div class="box">
+            <div class="t">Current Y</div>
+            <div class="v mono" id="kpi_y">0.00</div>
+          </div>
+          <div class="box">
+            <div class="t">Radicalism (distance)</div>
+            <div class="v mono" id="kpi_r">0.00</div>
+          </div>
+          <div class="box">
+            <div class="t">Classification</div>
+            <div class="v" id="kpi_label">—</div>
           </div>
         </div>
 
-        <div class="card">
-          <h2>Live preview</h2>
-          <div class="canvasWrap">
-            <canvas id="c_live" width="520" height="520"></canvas>
+        <div class="hr"></div>
+        <div class="smallnote muted">
+          “Synergy” (optional) nudges Neutral/Ambivalent answers using tag-consistency with your non-neutral answers.
+        </div>
+      </div>
+    </div>
+  `;
+
+  const $qOne = document.getElementById("qOne");
+  const c = document.getElementById("c_live");
+
+  function updateLive(res){
+    document.getElementById("kpi_x").textContent = res.x.toFixed(3);
+    document.getElementById("kpi_y").textContent = res.y.toFixed(3);
+    document.getElementById("kpi_r").textContent = res.r.toFixed(3);
+    document.getElementById("kpi_label").textContent = res.classification.label;
+    drawCompass(c, [{ x: res.x, y: res.y, label:"You", color:"rgba(124,156,255,.95)" }]);
+  }
+
+  function renderCurrentQuestion(){
+    const q = qs[curIdx];
+    const a = answers[q.id] || { choiceKey:"N", importanceKey:3 };
+    const tags = Array.isArray(q.tags) && q.tags.length ? q.tags : [];
+
+    // progress + answered badge
+    document.getElementById("qProgress").textContent = `Q${curIdx + 1} / ${qs.length}`;
+    const answered = !!answers[q.id];
+    document.getElementById("qAnsweredBadge").textContent = answered ? "Answered" : "Unanswered";
+
+    // buttons
+    const $prev = document.getElementById("btnPrev");
+    const $next = document.getElementById("btnNext");
+    $prev.disabled = (curIdx === 0);
+    $next.disabled = (curIdx === qs.length - 1);
+
+    // direction chips
+    const partsRaw = getQuestionDirParts(q, false);
+    const partsNorm = getQuestionDirParts(q, true);
+    const chips = (partsRaw.length ? partsRaw : partsNorm).map(p=>{
+      const d = dirDisplay(p.key);
+      const col = d.color || "#aaa";
+      const label = d.label || p.key;
+      return `<span class="badge" style="border-color:${hexToRgba(col,.4)}; background:${hexToRgba(col,.12)}; color:#e9eefc">
+        <b style="color:${col}">${htmlEscape(label)}</b>
+        × <span class="mono">${Number(p.w).toFixed(2)}</span>
+      </span>`;
+    }).join(" ");
+
+    const fallback = `<span class="badge">Direction: <b>${htmlEscape(q.direction || "—")}</b></span>`;
+
+    $qOne.innerHTML = `
+      <div class="item">
+        <div class="top">
+          <div style="flex:1">
+            <p class="title">
+              <span class="badge primary">Q${curIdx + 1}</span>
+              ${htmlEscape(q.text)}
+            </p>
+            <div class="meta">
+              <span class="badge">Direction mix:</span>
+              ${chips || fallback}
+              <span class="badge">Weight: <span class="mono">${Number(q.weight ?? 1).toFixed(2)}</span></span>
+              ${tags.length ? `<div class="chips" style="margin-top:6px">${tags.map(t=>`<span class="chip">#${htmlEscape(t)}</span>`).join("")}</div>` : ``}
+            </div>
           </div>
-          <div class="spacer"></div>
-          <div class="kpi">
-            <div class="box">
-              <div class="t">Current X</div>
-              <div class="v mono" id="kpi_x">0.00</div>
-            </div>
-            <div class="box">
-              <div class="t">Current Y</div>
-              <div class="v mono" id="kpi_y">0.00</div>
-            </div>
-            <div class="box">
-              <div class="t">Radicalism (distance)</div>
-              <div class="v mono" id="kpi_r">0.00</div>
-            </div>
-            <div class="box">
-              <div class="t">Classification</div>
-              <div class="v" id="kpi_label">—</div>
+        </div>
+
+        <div class="spacer"></div>
+
+        <div class="split">
+          <div>
+            <label>Answer</label>
+            <div class="choiceGrid" data-qid="${q.id}" data-field="choiceKey">
+              ${answerOptions.map(opt=>`
+                <label class="choice ${opt.key===a.choiceKey ? "active":""}">
+                  <input type="radio" name="ans_${q.id}" value="${opt.key}" ${opt.key===a.choiceKey ? "checked":""}/>
+                  <span class="k">${htmlEscape(opt.key)}</span>
+                  <span>${htmlEscape(opt.label)}</span>
+                </label>
+              `).join("")}
             </div>
           </div>
 
-          <div class="hr"></div>
-          <div class="smallnote muted">
-            “Synergy” (optional) nudges Neutral/Ambivalent answers using tag-consistency with your non-neutral answers.
+          <div>
+            <label>Importance</label>
+            <select id="impSel" data-qid="${q.id}" data-field="importanceKey">
+              ${impOptions.map(opt=>`
+                <option value="${opt.key}" ${Number(opt.key)===Number(a.importanceKey) ? "selected":""}>
+                  ${htmlEscape(opt.label)} (×${Number(opt.mult).toFixed(2)})
+                </option>
+              `).join("")}
+            </select>
           </div>
         </div>
       </div>
     `;
 
-    const $qList = document.getElementById("qList");
-    const c = document.getElementById("c_live");
+    // wire answer change
+    $qOne.querySelectorAll('.choiceGrid input[type="radio"]').forEach(inp=>{
+      inp.addEventListener("change", ()=>{
+        const qid = inp.closest(".choiceGrid").getAttribute("data-qid");
+        answers[qid] = answers[qid] || { choiceKey:"N", importanceKey:3 };
+        answers[qid].choiceKey = inp.value;
 
-    function renderQuestions(){
-      $qList.innerHTML = qs.map((q, idx)=>{
-        const a = answers[q.id] || { choiceKey:"N", importanceKey:3 };
-        const tags = Array.isArray(q.tags) && q.tags.length ? q.tags : [];
+        // active styles
+        const grid = inp.closest(".choiceGrid");
+        grid.querySelectorAll(".choice").forEach(l=>l.classList.remove("active"));
+        inp.closest(".choice").classList.add("active");
 
-        const partsRaw = getQuestionDirParts(q, false);
-        const partsNorm = getQuestionDirParts(q, true);
-
-        const chips = (partsRaw.length ? partsRaw : partsNorm).map(p=>{
-          const d = dirDisplay(p.key);
-          const col = d.color || "#aaa";
-          const label = d.label || p.key;
-          return `<span class="badge" style="border-color:${hexToRgba(col,.4)}; background:${hexToRgba(col,.12)}; color:#e9eefc">
-            <b style="color:${col}">${htmlEscape(label)}</b>
-            × <span class="mono">${Number(p.w).toFixed(2)}</span>
-          </span>`;
-        }).join(" ");
-
-        const fallback = `<span class="badge">Direction: <b>${htmlEscape(q.direction || "—")}</b></span>`;
-
-        return `
-          <div class="item">
-            <div class="top">
-              <div style="flex:1">
-                <p class="title"><span class="badge primary">Q${idx+1}</span> ${htmlEscape(q.text)}</p>
-                <div class="meta">
-                  <span class="badge">Direction mix:</span>
-                  ${chips || fallback}
-                  <span class="badge">Weight: <span class="mono">${Number(q.weight ?? 1).toFixed(2)}</span></span>
-                  ${tags.length ? `<div class="chips" style="margin-top:6px">${tags.map(t=>`<span class="chip">#${htmlEscape(t)}</span>`).join("")}</div>` : ``}
-                </div>
-              </div>
-            </div>
-
-            <div class="spacer"></div>
-            <div class="split">
-              <div>
-                <label>Answer</label>
-                <div class="choiceGrid" data-qid="${q.id}" data-field="choiceKey">
-                  ${answerOptions.map(opt=>`
-                    <label class="choice ${opt.key===a.choiceKey ? "active":""}">
-                      <input type="radio" name="ans_${q.id}" value="${opt.key}" ${opt.key===a.choiceKey ? "checked":""}/>
-                      <span class="k">${htmlEscape(opt.key)}</span>
-                      <span>${htmlEscape(opt.label)}</span>
-                    </label>
-                  `).join("")}
-                </div>
-              </div>
-              <div>
-                <label>Importance</label>
-                <select data-qid="${q.id}" data-field="importanceKey">
-                  ${impOptions.map(opt=>`
-                    <option value="${opt.key}" ${Number(opt.key)===Number(a.importanceKey) ? "selected":""}>
-                      ${htmlEscape(opt.label)} (×${Number(opt.mult).toFixed(2)})
-                    </option>
-                  `).join("")}
-                </select>
-              </div>
-            </div>
-          </div>
-        `;
-      }).join("");
-
-      // Answer radios
-      $qList.querySelectorAll('.choiceGrid[data-field="choiceKey"] input[type="radio"]').forEach(inp=>{
-        inp.addEventListener("change", ()=>{
-          const grid = inp.closest(".choiceGrid");
-          const qid = grid.getAttribute("data-qid");
-          answers[qid] = answers[qid] || { choiceKey:"N", importanceKey:3 };
-          answers[qid].choiceKey = inp.value;
-
-          // active styles
-          grid.querySelectorAll(".choice").forEach(l=>l.classList.remove("active"));
-          inp.closest(".choice").classList.add("active");
-
-          const preview = computeScore(qs, answers);
-          updateLive(preview);
-          localStorage.setItem(key, JSON.stringify(answers));
-        });
+        localStorage.setItem(key, JSON.stringify(answers));
+        updateLive(computeScore(qs, answers));
+        renderCurrentQuestion(); // refresh "Answered" badge
       });
+    });
 
-      // Importance selects (keep native)
-      $qList.querySelectorAll('select[data-field="importanceKey"]').forEach(sel=>{
-        sel.addEventListener("change", ()=>{
-          const qid = sel.getAttribute("data-qid");
-          answers[qid] = answers[qid] || { choiceKey:"N", importanceKey:3 };
-          answers[qid].importanceKey = Number(sel.value);
+    // wire importance change
+    const impSel = document.getElementById("impSel");
+    impSel.addEventListener("change", ()=>{
+      const qid = impSel.getAttribute("data-qid");
+      answers[qid] = answers[qid] || { choiceKey:"N", importanceKey:3 };
+      answers[qid].importanceKey = Number(impSel.value);
 
-          const preview = computeScore(qs, answers);
-          updateLive(preview);
-          localStorage.setItem(key, JSON.stringify(answers));
-        });
-      });
-    }
-
-    function updateLive(res){
-      document.getElementById("kpi_x").textContent = res.x.toFixed(3);
-      document.getElementById("kpi_y").textContent = res.y.toFixed(3);
-      document.getElementById("kpi_r").textContent = res.r.toFixed(3);
-      document.getElementById("kpi_label").textContent = res.classification.label;
-      drawCompass(c, [{ x: res.x, y: res.y, label:"You", color:"rgba(124,156,255,.95)" }]);
-    }
-
-    document.getElementById("saveDraft").onclick = ()=>{
       localStorage.setItem(key, JSON.stringify(answers));
-      toast("Draft saved locally.");
-    };
-
-    document.getElementById("clearDraft").onclick = ()=>{
-      localStorage.removeItem(key);
-      for(const k of Object.keys(answers)) delete answers[k];
-      renderQuestions();
       updateLive(computeScore(qs, answers));
-      toast("Draft cleared.");
-    };
-
-    document.getElementById("submitAttempt").onclick = async ()=>{
-      if(Object.keys(answers).length === 0){
-        toast("Answer at least one question.");
-        return;
-      }
-      if(!state.user){
-        toast("Still connecting… try again in a moment.");
-        return;
-      }
-
-      const res = computeScore(qs, answers);
-
-      try{
-        const attemptDoc = {
-          uid: state.user.uid,
-          createdAt: serverTimestamp(),
-          public: false,
-          answers,
-          computed: {
-            x: res.x, y: res.y, r: res.r,
-            kind: res.classification.kind,
-            poleKey: res.classification.poleKey,
-            poleName: res.classification.poleName,
-            poleAngleDistance: res.classification.poleAngleDistance ?? null,
-
-            sectorKey: res.classification.sectorKey,
-            sectorName: res.classification.sectorName,
-            sectorColorName: res.classification.sectorColorName,
-            filterName: res.classification.filterName,
-            sliceName: res.classification.sliceName,
-            leanPoleKey: res.classification.leanPoleKey ?? null,
-            leanPoleName: res.classification.leanPoleName ?? null,
-            betweenPoles: res.classification.betweenPoles,
-
-            label: res.classification.label,
-            radicalism: res.classification.radicalism,
-            angle360: res.classification.angle360,
-
-            maxSum: res.maxSum,
-            synergyNotes: res.synergyNotes,
-            breakdown: res.breakdown,
-            settingsSnapshot: state.settings,
-          }
-        };
-        const ref = await addDoc(collection(db, "attempts"), attemptDoc);
-        localStorage.removeItem(key);
-        state.lastAttempt = ref.id;
-        toast("Attempt saved.");
-        navTo(`#/attempt/${ref.id}`);
-      }catch(e){
-        toast("Failed to save attempt: " + (e?.message || e));
-      }
-    };
-
-    renderQuestions();
-    updateLive(computeScore(qs, answers));
+      renderCurrentQuestion(); // refresh "Answered" badge
+    });
   }
 
+  // nav buttons
+  document.getElementById("btnPrev").onclick = ()=>{
+    curIdx = clampInt(curIdx - 1, 0, qs.length - 1);
+    localStorage.setItem(idxKey, String(curIdx));
+    renderCurrentQuestion();
+  };
+
+  document.getElementById("btnNext").onclick = ()=>{
+    curIdx = clampInt(curIdx + 1, 0, qs.length - 1);
+    localStorage.setItem(idxKey, String(curIdx));
+    renderCurrentQuestion();
+  };
+
+  // save/clear
+  document.getElementById("saveDraft").onclick = ()=>{
+    localStorage.setItem(key, JSON.stringify(answers));
+    toast("Draft saved locally.");
+  };
+
+  document.getElementById("clearDraft").onclick = ()=>{
+    localStorage.removeItem(key);
+    for(const k of Object.keys(answers)) delete answers[k];
+    toast("Draft cleared.");
+    updateLive(computeScore(qs, answers));
+    renderCurrentQuestion();
+  };
+
+  // submit attempt (same logic you had)
+  document.getElementById("submitAttempt").onclick = async ()=>{
+    if(Object.keys(answers).length === 0){
+      toast("Answer at least one question.");
+      return;
+    }
+    if(!state.user){
+      toast("Still connecting… try again in a moment.");
+      return;
+    }
+
+    const res = computeScore(qs, answers);
+
+    try{
+      const attemptDoc = {
+        uid: state.user.uid,
+        createdAt: serverTimestamp(),
+        public: false,
+        answers,
+        computed: {
+          x: res.x, y: res.y, r: res.r,
+          kind: res.classification.kind,
+          poleKey: res.classification.poleKey,
+          poleName: res.classification.poleName,
+          poleAngleDistance: res.classification.poleAngleDistance ?? null,
+
+          sectorKey: res.classification.sectorKey,
+          sectorName: res.classification.sectorName,
+          sectorColorName: res.classification.sectorColorName,
+          filterName: res.classification.filterName,
+          sliceName: res.classification.sliceName,
+          leanPoleKey: res.classification.leanPoleKey ?? null,
+          leanPoleName: res.classification.leanPoleName ?? null,
+          betweenPoles: res.classification.betweenPoles,
+
+          label: res.classification.label,
+          radicalism: res.classification.radicalism,
+          angle360: res.classification.angle360,
+
+          maxSum: res.maxSum,
+          synergyNotes: res.synergyNotes,
+          breakdown: res.breakdown,
+          settingsSnapshot: state.settings,
+        }
+      };
+
+      const ref = await addDoc(collection(db, "attempts"), attemptDoc);
+      localStorage.removeItem(key);
+      state.lastAttempt = ref.id;
+      toast("Attempt saved.");
+      navTo(`#/attempt/${ref.id}`);
+    }catch(e){
+      toast("Failed to save attempt: " + (e?.message || e));
+    }
+  };
+
+  // initial paint
+  updateLive(computeScore(qs, answers));
+  renderCurrentQuestion();
+}
   async function fetchMyAttempts(){
     if(!state.user) return [];
     const out = [];
@@ -2866,3 +2918,4 @@ Local communities should govern themselves | Libertarian Left | 0.9 | decentrali
 </script>
 </body>
 </html>
+
